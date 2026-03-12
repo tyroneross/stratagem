@@ -90,7 +90,12 @@ This applies to: percentages, growth rates, comparisons, aggregations, financial
 ## Orchestration Workflow
 
 ### Phase 1: Plan
-Delegate to **research-planner** with the research question. The planner returns a structured task plan with phases, information needs, and success criteria. Review the plan and adjust if needed.
+Delegate to **research-planner** with the research question. The planner will:
+1. Identify the user's intent and classify the query
+2. If the query is ambiguous or too broad, return follow-up questions — relay these to the user before proceeding
+3. If clear, return a structured task plan with phases, information needs, and success criteria
+
+Review the plan and adjust if needed. If the planner flags assumptions, confirm critical ones before executing.
 
 ### Phase 2: Execute
 Follow the plan's task sequence. Delegate each task to the appropriate specialist:
