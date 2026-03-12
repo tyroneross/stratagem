@@ -217,6 +217,24 @@ body {
   background: var(--success);
   animation: none;
 }
+.agent-model {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.agent-model.opus {
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
+  color: var(--warn);
+}
+.agent-model.sonnet {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+.agent-model.haiku {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
 .agent-action {
   font-size: 11px;
   color: var(--text-muted);
@@ -264,10 +282,10 @@ body {
     <textarea id="prompt" placeholder="Enter your research question..."></textarea>
     <div class="controls">
       <select id="model">
-        <option value="">Default (Opus)</option>
-        <option value="opus">Opus</option>
-        <option value="sonnet">Sonnet</option>
-        <option value="haiku">Haiku</option>
+        <option value="">Orchestrator: Opus</option>
+        <option value="opus">Orchestrator: Opus</option>
+        <option value="sonnet">Orchestrator: Sonnet</option>
+        <option value="haiku">Orchestrator: Haiku</option>
       </select>
       <button class="btn btn-primary" id="runBtn" onclick="runQuery()">Run Research</button>
       <button class="btn btn-stop" id="stopBtn" onclick="stopQuery()" style="display:none">Stop</button>
@@ -320,9 +338,9 @@ function updateProgress(phase, pct) {
   document.getElementById('progressLabel').textContent = Math.round(pct) + '%';
 }
 
-function addAgent(name, action) {
+function addAgent(name, action, model) {
   if (activeAgents[name]) return;
-  activeAgents[name] = { action, active: true };
+  activeAgents[name] = { action, model: model || 'sonnet', active: true };
   renderAgents();
 }
 
@@ -340,8 +358,10 @@ function renderAgents() {
   for (const [name, info] of Object.entries(activeAgents)) {
     const chip = document.createElement('div');
     chip.className = 'agent-chip' + (info.active ? '' : ' completed');
+    const modelTag = '<span class="agent-model ' + info.model + '">' + info.model + '</span>';
     chip.innerHTML = '<span class="agent-dot"></span>'
       + '<span>' + escapeHtml(name) + '</span>'
+      + modelTag
       + '<span class="agent-action">' + escapeHtml(info.action) + '</span>';
     el.appendChild(chip);
   }
@@ -391,7 +411,7 @@ function runQuery() {
         updateProgress(phase.label, ((phase.idx + 1) / PHASES.length) * 85 + 5);
       }
     } else if (data.type === 'agent_start') {
-      addAgent(data.name, data.action);
+      addAgent(data.name, data.action, data.model);
       if (currentPhase === 0 && data.name !== 'research-planner') {
         currentPhase = 1;
         updateProgress('Phase 2: Executing', 30);
@@ -466,6 +486,21 @@ _AGENT_ACTIONS = {
     "plan-validator": "checking for drift",
     "source-verifier": "verifying sources",
     "report-critic": "evaluating report quality",
+}
+
+# Model assigned to each subagent (from definitions.py)
+_AGENT_MODELS = {
+    "research-planner": "sonnet",
+    "data-extractor": "sonnet",
+    "financial-analyst": "opus",
+    "research-synthesizer": "opus",
+    "executive-synthesizer": "sonnet",
+    "flowchart-architect": "sonnet",
+    "design-agent": "sonnet",
+    "prompt-optimizer": "sonnet",
+    "plan-validator": "sonnet",
+    "source-verifier": "sonnet",
+    "report-critic": "sonnet",
 }
 
 
@@ -565,10 +600,12 @@ class StratagemHandler(BaseHTTPRequestHandler):
                             agent_name = _extract_agent_name(block.input)
                             if agent_name:
                                 action = _AGENT_ACTIONS.get(agent_name, "working")
+                                model = _AGENT_MODELS.get(agent_name, "sonnet")
                                 send_event({
                                     "type": "agent_start",
                                     "name": agent_name,
                                     "action": action,
+                                    "model": model,
                                 })
                                 active_agents.add(agent_name)
                         else:
