@@ -13,7 +13,7 @@ def main():
     )
     parser.add_argument(
         "prompt",
-        nargs="?",
+        nargs="*",
         help="Research question or task to execute",
     )
     parser.add_argument(
@@ -74,21 +74,21 @@ def main():
         print(f"Architecture data written to {arch_dir}")
         sys.exit(0)
 
-    if not args.prompt:
-        # Interactive mode: read from stdin
+    # Join positional args as prompt (allows: stratagem what is the latest news)
+    prompt = " ".join(args.prompt).strip() if args.prompt else ""
+
+    if not prompt:
         if sys.stdin.isatty():
-            parser.print_help()
-            print("\nExamples:")
-            print('  stratagem "What are the earnings trends for top networking companies?"')
-            print('  stratagem "Analyze Cisco\'s latest 10-K filing"')
-            print('  stratagem "Extract key metrics from report.pdf"')
+            # Interactive REPL mode
+            _interactive(args)
             sys.exit(0)
         else:
-            args.prompt = sys.stdin.read().strip()
-            if not args.prompt:
+            prompt = sys.stdin.read().strip()
+            if not prompt:
                 print("Error: No prompt provided", file=sys.stderr)
                 sys.exit(1)
 
+    args.prompt = prompt
     try:
         asyncio.run(_run(args))
     except KeyboardInterrupt:
@@ -99,9 +99,39 @@ def main():
         sys.exit(1)
 
 
+def _interactive(args):
+    """Interactive REPL — type queries naturally, Ctrl+C or 'exit' to quit."""
+    print("Stratagem v0.1.0 — Market research agent")
+    print("Type your research question. Ctrl+C or 'exit' to quit.\n")
+
+    while True:
+        try:
+            prompt = input("\033[1mstratagem>\033[0m ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nBye.")
+            break
+
+        if not prompt:
+            continue
+        if prompt.lower() in ("exit", "quit", "q"):
+            print("Bye.")
+            break
+
+        args.prompt = prompt
+        try:
+            asyncio.run(_run(args))
+        except KeyboardInterrupt:
+            print("\n\nInterrupted. Ready for next query.\n")
+        except Exception as e:
+            print(f"\nError: {e}\n", file=sys.stderr)
+
+        print()  # blank line between queries
+
+
 async def _run(args):
     from stratagem.agent import run_research
 
+    prompt = args.prompt if isinstance(args.prompt, str) else " ".join(args.prompt)
     cwd = Path(args.cwd) if args.cwd else Path.cwd()
     verbose = not args.quiet
 
@@ -112,7 +142,7 @@ async def _run(args):
     (cwd / "output").mkdir(parents=True, exist_ok=True)
 
     async for message in run_research(
-        prompt=args.prompt,
+        prompt=prompt,
         cwd=cwd,
         model=args.model,
         max_turns=args.max_turns,
