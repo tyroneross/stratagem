@@ -100,4 +100,15 @@ SUBAGENTS: dict[str, AgentDefinition] = {
         tools=["Read"],
         model="sonnet",
     ),
+    "design-agent": AgentDefinition(
+        description="Design visual structure and layout for deliverables — presentations, dashboards, reports, infographics. Applies Calm Precision principles as flexible guidance. Recommends chart types, information hierarchy, and slide layouts.",
+        prompt=_load_prompt("design_agent"),
+        tools=[
+            f"{_S}create_pptx",
+            f"{_S}create_report",
+            "Read",
+            "Write",
+        ],
+        model="sonnet",
+    ),
 }

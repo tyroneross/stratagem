@@ -29,6 +29,7 @@ AGENT_PHASES = {
     "plan-validator": "quality",
     "source-verifier": "quality",
     "report-critic": "delivery",
+    "design-agent": "delivery",
 }
 
 # Model cost tiers

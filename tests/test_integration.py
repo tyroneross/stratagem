@@ -39,6 +39,7 @@ class TestSubagents:
             "source-verifier",
             "report-critic",
             "plan-validator",
+            "design-agent",
         ]
         for name in expected:
             assert name in SUBAGENTS, f"Missing subagent: {name}"
@@ -95,9 +96,9 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 11 agents + 9 tools = 20 components
-        assert index["stats"]["total_components"] == 20
-        assert index["stats"]["components_by_type"]["agent"] == 11
+        # 12 agents + 9 tools = 21 components
+        assert index["stats"]["total_components"] == 21
+        assert index["stats"]["components_by_type"]["agent"] == 12
         assert index["stats"]["components_by_type"]["service"] == 9
 
     def test_connection_count(self, tmp_path):
@@ -105,8 +106,8 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 10 delegations + 3 feedback + 11 tool uses + 1 control→create_report = 25
-        assert index["stats"]["total_connections"] == 25
+        # 11 delegations + 3 feedback + 13 tool uses + 1 control→create_report = 28
+        assert index["stats"]["total_connections"] == 28
 
     def test_graph_nodes_match_components(self, tmp_path):
         import json
@@ -122,5 +123,5 @@ class TestNavGator:
         arch_dir = generate_architecture(tmp_path)
         comp_files = list((arch_dir / "components").glob("COMP_*.json"))
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
-        assert len(comp_files) == 20
-        assert len(conn_files) == 25
+        assert len(comp_files) == 21
+        assert len(conn_files) == 28

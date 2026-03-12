@@ -40,6 +40,17 @@ def main():
         help="Only output the final result",
     )
     parser.add_argument(
+        "--ui",
+        action="store_true",
+        help="Launch the web UI at http://localhost:8420",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8420,
+        help="Port for the web UI (default: 8420)",
+    )
+    parser.add_argument(
         "--architecture",
         action="store_true",
         help="Generate NavGator-compatible architecture data and exit",
@@ -51,6 +62,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.ui:
+        from stratagem.ui import start_ui
+        start_ui(port=args.port)
+        sys.exit(0)
 
     if args.architecture:
         from stratagem.navgator import generate_architecture
