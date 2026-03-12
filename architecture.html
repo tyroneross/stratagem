@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stratagem — Agent Architecture</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --border: #e5e5e5;
+    --divider: #f0f0f0;
+    --text-primary: #1a1a1a;
+    --text-secondary: #525252;
+    --text-muted: #a3a3a3;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --opus: #7c3aed;
+    --opus-light: #f5f3ff;
+    --sonnet: #0891b2;
+    --sonnet-light: #ecfeff;
+    --tool: #059669;
+    --tool-light: #ecfdf5;
+    --team: #d97706;
+    --team-light: #fffbeb;
+    --control: #dc2626;
+    --control-light: #fef2f2;
+    --phase-line: #d4d4d4;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0a0a;
+      --surface: #171717;
+      --border: #262626;
+      --divider: #1f1f1f;
+      --text-primary: #fafafa;
+      --text-secondary: #a3a3a3;
+      --text-muted: #525252;
+      --accent: #60a5fa;
+      --accent-light: #172554;
+      --opus: #a78bfa;
+      --opus-light: #1e1b4b;
+      --sonnet: #22d3ee;
+      --sonnet-light: #083344;
+      --tool: #34d399;
+      --tool-light: #022c22;
+      --team: #fbbf24;
+      --team-light: #422006;
+      --control: #f87171;
+      --control-light: #450a0a;
+      --phase-line: #404040;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Layout */
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  /* L1 Anchor */
+  .page-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* Header bar */
+  .header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
+  .stats { display: flex; gap: 24px; }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+  /* View toggle */
+  .view-toggle { display: flex; gap: 2px; background: var(--divider); border-radius: 8px; padding: 2px; }
+  .view-btn {
+    padding: 6px 14px; border: none; background: transparent;
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    border-radius: 6px; cursor: pointer; transition: all 0.15s;
+  }
+  .view-btn.active { background: var(--surface); color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+
+  /* Sections */
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 12px;
+  }
+
+  /* Agent cards */
+  .agent-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  @media (min-width: 640px) { .agent-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 960px) { .agent-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .agent-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .agent-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+  .agent-card.expanded { grid-column: 1 / -1; }
+
+  .agent-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .agent-name { font-size: 14px; font-weight: 600; }
+  .agent-model {
+    font-size: 10px; font-weight: 600; padding: 2px 6px;
+    border-radius: 4px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .model-opus { color: var(--opus); background: var(--opus-light); }
+  .model-sonnet { color: var(--sonnet); background: var(--sonnet-light); }
+
+  .agent-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .agent-role {
+    font-size: 10px; font-weight: 600; padding: 2px 6px;
+    border-radius: 4px; margin-left: auto;
+  }
+  .role-control { color: var(--control); background: var(--control-light); }
+  .role-specialist { color: var(--accent); background: var(--accent-light); }
+  .role-quality { color: var(--tool); background: var(--tool-light); }
+
+  /* Tool pills */
+  .tools-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }
+  .tool-pill {
+    font-size: 10px; padding: 2px 8px; border-radius: 4px;
+    color: var(--tool); background: var(--tool-light);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* Control agent hero */
+  .control-hero {
+    background: var(--surface); border: 2px solid var(--control);
+    border-radius: 12px; padding: 20px; margin-bottom: 24px;
+    position: relative; overflow: hidden;
+  }
+  .control-hero::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--control), var(--opus), var(--sonnet));
+  }
+  .control-hero .agent-name { font-size: 18px; }
+  .control-hero .agent-desc { font-size: 13px; margin-top: 4px; }
+
+  /* Phase flow */
+  .phase-flow { display: flex; flex-direction: column; gap: 0; margin: 24px 0; }
+  @media (min-width: 768px) { .phase-flow { flex-direction: row; gap: 0; align-items: stretch; } }
+
+  .phase-step {
+    flex: 1; padding: 14px 16px; background: var(--surface);
+    border: 1px solid var(--border); position: relative;
+  }
+  .phase-step:first-child { border-radius: 10px 10px 0 0; }
+  .phase-step:last-child { border-radius: 0 0 10px 10px; }
+  @media (min-width: 768px) {
+    .phase-step:first-child { border-radius: 10px 0 0 10px; }
+    .phase-step:last-child { border-radius: 0 10px 10px 0; }
+  }
+  .phase-step + .phase-step { border-top: none; }
+  @media (min-width: 768px) { .phase-step + .phase-step { border-top: 1px solid var(--border); border-left: none; } }
+
+  .phase-num {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .phase-title { font-size: 13px; font-weight: 600; }
+  .phase-agents { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+  .phase-arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 16px; padding: 4px 0;
+  }
+  @media (min-width: 768px) { .phase-arrow { padding: 0 4px; transform: rotate(0); } }
+
+  /* Connection lines (flow view) */
+  .flow-view { display: none; }
+  .flow-view.active { display: block; }
+  .grid-view { display: none; }
+  .grid-view.active { display: block; }
+
+  /* Flow diagram */
+  .flow-diagram {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; overflow-x: auto;
+  }
+  .flow-svg { width: 100%; min-width: 800px; }
+
+  /* Tools section */
+  .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .tool-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px;
+  }
+  .tool-name { font-size: 13px; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--tool); }
+  .tool-desc { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+  .tool-users { font-size: 10px; color: var(--text-muted); margin-top: 6px; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Detail panel */
+  .detail-panel {
+    display: none; position: fixed; top: 0; right: 0; bottom: 0;
+    width: 400px; max-width: 90vw; background: var(--surface);
+    border-left: 1px solid var(--border); padding: 24px;
+    overflow-y: auto; z-index: 100; box-shadow: -4px 0 24px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+  }
+  .detail-panel.open { display: block; }
+  .detail-close {
+    position: absolute; top: 16px; right: 16px; background: none;
+    border: none; font-size: 18px; cursor: pointer; color: var(--text-muted);
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+  }
+  .detail-close:hover { background: var(--divider); color: var(--text-primary); }
+  .detail-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .detail-section { margin-top: 20px; }
+  .detail-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 8px; }
+  .detail-list { list-style: none; }
+  .detail-list li { font-size: 12px; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px solid var(--divider); }
+  .detail-list li:last-child { border-bottom: none; }
+
+  .backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 99; }
+  .backdrop.open { display: block; }
+
+  /* Execution model badges */
+  .exec-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .exec-subagent { color: var(--accent); background: var(--accent-light); }
+  .exec-team { color: var(--team); background: var(--team-light); }
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- L1 Anchor -->
+  <div class="header">
+    <div>
+      <h1 class="page-title">Stratagem</h1>
+      <p class="page-subtitle">Market Research Agent Architecture</p>
+    </div>
+    <div class="stats">
+      <div><div class="stat-value">11</div><div class="stat-label">Agents</div></div>
+      <div><div class="stat-value">9</div><div class="stat-label">Tools</div></div>
+      <div><div class="stat-value">4</div><div class="stat-label">Output Formats</div></div>
+    </div>
+  </div>
+
+  <!-- View Toggle -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--control)"></div> Control</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Specialist</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--tool)"></div> Quality Gate</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--opus)"></div> Opus</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--sonnet)"></div> Sonnet</div>
+    </div>
+    <div class="view-toggle">
+      <button class="view-btn active" onclick="setView('grid')">Grid</button>
+      <button class="view-btn" onclick="setView('flow')">Flow</button>
+    </div>
+  </div>
+
+  <!-- Control Agent Hero -->
+  <div class="control-hero" onclick="showDetail('control')">
+    <div class="agent-header">
+      <div class="agent-name">Control Agent</div>
+      <span class="agent-model model-opus">Opus</span>
+      <span class="agent-role role-control">Orchestrator</span>
+    </div>
+    <div class="agent-desc">
+      Plans, delegates, tracks progress, and ensures quality. Maintains high-level directional context while delegating specific work to specialist subagents or agent teams.
+    </div>
+    <div class="tools-row">
+      <span class="tool-pill">All 9 MCP tools</span>
+      <span class="tool-pill">Read</span>
+      <span class="tool-pill">Write</span>
+      <span class="tool-pill">WebSearch</span>
+      <span class="tool-pill">Agent</span>
+    </div>
+  </div>
+
+  <!-- Orchestration Flow -->
+  <div class="section">
+    <div class="section-title">Orchestration Workflow</div>
+    <div class="phase-flow">
+      <div class="phase-step">
+        <div class="phase-num">Phase 1</div>
+        <div class="phase-title">Plan</div>
+        <div class="phase-agents">research-planner</div>
+      </div>
+      <div class="phase-arrow">&#8594;</div>
+      <div class="phase-step">
+        <div class="phase-num">Phase 2</div>
+        <div class="phase-title">Execute</div>
+        <div class="phase-agents">data-extractor, financial-analyst, synthesizers</div>
+      </div>
+      <div class="phase-arrow">&#8594;</div>
+      <div class="phase-step">
+        <div class="phase-num">Phase 3</div>
+        <div class="phase-title">Validate</div>
+        <div class="phase-agents">plan-validator, source-verifier</div>
+      </div>
+      <div class="phase-arrow">&#8594;</div>
+      <div class="phase-step">
+        <div class="phase-num">Phase 4</div>
+        <div class="phase-title">Report</div>
+        <div class="phase-agents">report-critic &rarr; create_report</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid View -->
+  <div class="grid-view active" id="gridView">
+    <!-- Specialist Agents -->
+    <div class="section">
+      <div class="section-title">Specialist Agents</div>
+      <div class="agent-grid">
+        <div class="agent-card" onclick="showDetail('data-extractor')">
+          <div class="agent-header">
+            <div class="agent-name">data-extractor</div>
+            <span class="agent-model model-sonnet">Sonnet</span>
+            <span class="agent-role role-specialist">Specialist</span>
+          </div>
+          <div class="agent-desc">Extract structured data from PDFs, websites, spreadsheets, and presentations.</div>
+          <div class="tools-row">
+            <span class="tool-pill">parse_pdf</span>
+            <span class="tool-pill">scrape_url</span>
+            <span class="tool-pill">read_spreadsheet</span>
+            <span class="tool-pill">read_pptx</span>
+            <span class="tool-pill">extract_images</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('financial-analyst')">
+          <div class="agent-header">
+            <div class="agent-name">financial-analyst</div>
+            <span class="agent-model model-opus">Opus</span>
+            <span class="agent-role role-specialist">Specialist</span>
+          </div>
+          <div class="agent-desc">Analyze SEC filings, earnings reports, and financial statements.</div>
+          <div class="tools-row">
+            <span class="tool-pill">search_sec_filings</span>
+            <span class="tool-pill">download_sec_filing</span>
+            <span class="tool-pill">read_spreadsheet</span>
+            <span class="tool-pill">parse_pdf</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('research-synthesizer')">
+          <div class="agent-header">
+            <div class="agent-name">research-synthesizer</div>
+            <span class="agent-model model-opus">Opus</span>
+            <span class="agent-role role-specialist">Specialist</span>
+          </div>
+          <div class="agent-desc">Synthesize research from multiple sources into comprehensive, authoritative narratives.</div>
+          <div class="tools-row">
+            <span class="tool-pill">Read</span>
+            <span class="tool-pill">Write</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('executive-synthesizer')">
+          <div class="agent-header">
+            <div class="agent-name">executive-synthesizer</div>
+            <span class="agent-model model-opus">Opus</span>
+            <span class="agent-role role-specialist">Specialist</span>
+          </div>
+          <div class="agent-desc">Create executive-ready research briefs with strategic framing and confidence assessments.</div>
+          <div class="tools-row">
+            <span class="tool-pill">Read</span>
+            <span class="tool-pill">Write</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('flowchart-architect')">
+          <div class="agent-header">
+            <div class="agent-name">flowchart-architect</div>
+            <span class="agent-model model-opus">Opus</span>
+            <span class="agent-role role-specialist">Specialist</span>
+          </div>
+          <div class="agent-desc">Design financial model architectures and create PPTX flowchart visualizations.</div>
+          <div class="tools-row">
+            <span class="tool-pill">create_pptx</span>
+            <span class="tool-pill">Read</span>
+            <span class="tool-pill">Write</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('prompt-optimizer')">
+          <div class="agent-header">
+            <div class="agent-name">prompt-optimizer</div>
+            <span class="agent-model model-opus">Opus</span>
+            <span class="agent-role role-specialist">Specialist</span>
+          </div>
+          <div class="agent-desc">Analyze, refine, and optimize research prompts for accuracy and reliability.</div>
+          <div class="tools-row">
+            <span class="tool-pill">Read</span>
+            <span class="tool-pill">Write</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quality Gate Agents -->
+    <div class="section">
+      <div class="section-title">Quality Gate Agents</div>
+      <div class="agent-grid">
+        <div class="agent-card" onclick="showDetail('research-planner')">
+          <div class="agent-header">
+            <div class="agent-name">research-planner</div>
+            <span class="agent-model model-sonnet">Sonnet</span>
+            <span class="agent-role role-quality">Planning</span>
+          </div>
+          <div class="agent-desc">Decomposes questions into structured task plans. Decides subagent vs agent team execution.</div>
+          <div class="tools-row">
+            <span class="tool-pill">Read</span>
+            <span class="tool-pill">WebSearch</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('source-verifier')">
+          <div class="agent-header">
+            <div class="agent-name">source-verifier</div>
+            <span class="agent-model model-sonnet">Sonnet</span>
+            <span class="agent-role role-quality">Verification</span>
+          </div>
+          <div class="agent-desc">Validates claims against cited sources. Detects hallucination, stale data, contradictions.</div>
+          <div class="tools-row">
+            <span class="tool-pill">scrape_url</span>
+            <span class="tool-pill">Read</span>
+            <span class="tool-pill">WebSearch</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('report-critic')">
+          <div class="agent-header">
+            <div class="agent-name">report-critic</div>
+            <span class="agent-model model-sonnet">Sonnet</span>
+            <span class="agent-role role-quality">Evaluation</span>
+          </div>
+          <div class="agent-desc">Evaluates reports across 5 dimensions. Publish threshold: 4.0/5.0 average score.</div>
+          <div class="tools-row">
+            <span class="tool-pill">Read</span>
+          </div>
+        </div>
+
+        <div class="agent-card" onclick="showDetail('plan-validator')">
+          <div class="agent-header">
+            <div class="agent-name">plan-validator</div>
+            <span class="agent-model model-sonnet">Sonnet</span>
+            <span class="agent-role role-quality">Drift Detection</span>
+          </div>
+          <div class="agent-desc">Monitors execution for drift using statistical process control. Spot-checks subagent outputs.</div>
+          <div class="tools-row">
+            <span class="tool-pill">Read</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execution Models -->
+    <div class="section">
+      <div class="section-title">Execution Models</div>
+      <div class="agent-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+        <div class="agent-card" style="cursor:default;">
+          <div class="agent-header">
+            <span class="exec-badge exec-subagent">Subagents</span>
+            <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">Default</span>
+          </div>
+          <div class="agent-desc" style="margin-top:8px;">
+            Focused, independent tasks. Each runs in its own context, reports results back to the control agent. No peer communication.
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:10px; padding-top:10px; border-top:1px solid var(--divider);">
+            Best for: extraction, analysis, synthesis, report generation
+          </div>
+        </div>
+
+        <div class="agent-card" style="cursor:default;">
+          <div class="agent-header">
+            <span class="exec-badge exec-team">Agent Teams</span>
+            <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">When planner recommends</span>
+          </div>
+          <div class="agent-desc" style="margin-top:8px;">
+            Parallel exploration with inter-agent messaging. Shared task list, self-coordination. Teammates challenge and cross-reference each other.
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:10px; padding-top:10px; border-top:1px solid var(--divider);">
+            Best for: competing hypotheses, adversarial review, triangulation
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MCP Tools -->
+    <div class="section">
+      <div class="section-title">MCP Tools</div>
+      <div class="tools-grid">
+        <div class="tool-card">
+          <div class="tool-name">parse_pdf</div>
+          <div class="tool-desc">Extract text, tables, and metadata from PDF files</div>
+          <div class="tool-users">Used by: data-extractor, financial-analyst</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">scrape_url</div>
+          <div class="tool-desc">Fetch and extract article content as markdown</div>
+          <div class="tool-users">Used by: data-extractor, source-verifier</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">read_spreadsheet</div>
+          <div class="tool-desc">Parse Excel/CSV files to markdown tables</div>
+          <div class="tool-users">Used by: data-extractor, financial-analyst</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">read_pptx</div>
+          <div class="tool-desc">Extract text and notes from PowerPoint</div>
+          <div class="tool-users">Used by: data-extractor</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">create_pptx</div>
+          <div class="tool-desc">Create PowerPoint presentations</div>
+          <div class="tool-users">Used by: flowchart-architect</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">extract_images</div>
+          <div class="tool-desc">Extract images from PDF, PPTX, DOCX</div>
+          <div class="tool-users">Used by: data-extractor</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">search_sec_filings</div>
+          <div class="tool-desc">Search SEC EDGAR for company filings</div>
+          <div class="tool-users">Used by: financial-analyst</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">download_sec_filing</div>
+          <div class="tool-desc">Download specific SEC filing to filesystem</div>
+          <div class="tool-users">Used by: financial-analyst</div>
+        </div>
+        <div class="tool-card">
+          <div class="tool-name">create_report</div>
+          <div class="tool-desc">Generate reports: markdown, pptx, html, docx</div>
+          <div class="tool-users">Used by: control agent</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow View -->
+  <div class="flow-view" id="flowView">
+    <div class="section">
+      <div class="section-title">Data Flow Diagram</div>
+      <div class="flow-diagram">
+        <svg class="flow-svg" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 3 L 0 6 z" fill="#a3a3a3"/>
+            </marker>
+            <marker id="arrow-red" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 3 L 0 6 z" fill="#dc2626"/>
+            </marker>
+          </defs>
+
+          <!-- Question input -->
+          <rect x="350" y="10" width="200" height="36" rx="8" fill="none" stroke="#a3a3a3" stroke-dasharray="4"/>
+          <text x="450" y="33" text-anchor="middle" font-size="12" fill="#a3a3a3" font-family="system-ui">Research Question</text>
+
+          <!-- Control Agent -->
+          <rect x="340" y="70" width="220" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+          <text x="450" y="97" text-anchor="middle" font-size="13" font-weight="700" fill="#dc2626" font-family="system-ui">Control Agent (Opus)</text>
+
+          <!-- Arrow from question to control -->
+          <line x1="450" y1="46" x2="450" y2="70" stroke="#a3a3a3" marker-end="url(#arrow)"/>
+
+          <!-- Phase 1: Planner -->
+          <rect x="30" y="160" width="160" height="40" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="110" y="184" text-anchor="middle" font-size="11" font-weight="600" fill="#059669" font-family="system-ui">research-planner</text>
+          <text x="110" y="214" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Sonnet</text>
+
+          <!-- Phase 2: Specialists -->
+          <rect x="30" y="260" width="160" height="40" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+          <text x="110" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#2563eb" font-family="system-ui">data-extractor</text>
+          <text x="110" y="314" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Sonnet</text>
+
+          <rect x="230" y="260" width="160" height="40" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+          <text x="310" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#2563eb" font-family="system-ui">financial-analyst</text>
+          <text x="310" y="314" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Opus</text>
+
+          <rect x="430" y="260" width="180" height="40" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+          <text x="520" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#2563eb" font-family="system-ui">research-synthesizer</text>
+          <text x="520" y="314" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Opus</text>
+
+          <rect x="650" y="260" width="180" height="40" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+          <text x="740" y="284" text-anchor="middle" font-size="11" font-weight="600" fill="#2563eb" font-family="system-ui">executive-synthesizer</text>
+          <text x="740" y="314" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Opus</text>
+
+          <!-- Phase 3: Validators -->
+          <rect x="230" y="370" width="160" height="40" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="310" y="394" text-anchor="middle" font-size="11" font-weight="600" fill="#059669" font-family="system-ui">plan-validator</text>
+          <text x="310" y="424" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Sonnet — SPC</text>
+
+          <rect x="430" y="370" width="160" height="40" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="510" y="394" text-anchor="middle" font-size="11" font-weight="600" fill="#059669" font-family="system-ui">source-verifier</text>
+          <text x="510" y="424" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Sonnet — CoVe</text>
+
+          <!-- Phase 4: Critic + Report -->
+          <rect x="280" y="470" width="160" height="40" rx="8" fill="#ecfdf5" stroke="#059669"/>
+          <text x="360" y="494" text-anchor="middle" font-size="11" font-weight="600" fill="#059669" font-family="system-ui">report-critic</text>
+          <text x="360" y="514" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">Sonnet — Score >= 4.0</text>
+
+          <rect x="480" y="470" width="160" height="40" rx="8" fill="none" stroke="#059669" stroke-dasharray="4"/>
+          <text x="560" y="494" text-anchor="middle" font-size="11" font-weight="600" fill="#059669" font-family="system-ui">create_report</text>
+          <text x="560" y="514" text-anchor="middle" font-size="9" fill="#a3a3a3" font-family="system-ui">md / docx / pptx / html</text>
+
+          <!-- Connections: Control to Phase 1 -->
+          <path d="M 400 114 Q 200 140 110 160" stroke="#dc2626" fill="none" marker-end="url(#arrow-red)" stroke-width="1.5"/>
+
+          <!-- Control to Phase 2 -->
+          <path d="M 380 114 Q 110 200 110 260" stroke="#dc2626" fill="none" marker-end="url(#arrow-red)" stroke-width="1.5"/>
+          <path d="M 420 114 Q 310 200 310 260" stroke="#dc2626" fill="none" marker-end="url(#arrow-red)" stroke-width="1.5"/>
+          <path d="M 480 114 Q 520 200 520 260" stroke="#dc2626" fill="none" marker-end="url(#arrow-red)" stroke-width="1.5"/>
+          <path d="M 520 114 Q 700 200 740 260" stroke="#dc2626" fill="none" marker-end="url(#arrow-red)" stroke-width="1.5"/>
+
+          <!-- Phase 2 to Phase 3 -->
+          <line x1="310" y1="300" x2="310" y2="370" stroke="#a3a3a3" marker-end="url(#arrow)" stroke-dasharray="3"/>
+          <line x1="520" y1="300" x2="510" y2="370" stroke="#a3a3a3" marker-end="url(#arrow)" stroke-dasharray="3"/>
+
+          <!-- Phase 3 to Phase 4 -->
+          <line x1="340" y1="410" x2="360" y2="470" stroke="#a3a3a3" marker-end="url(#arrow)" stroke-dasharray="3"/>
+          <line x1="510" y1="410" x2="510" y2="470" stroke="#a3a3a3" marker-end="url(#arrow)" stroke-dasharray="3"/>
+
+          <!-- Critic to Report -->
+          <line x1="440" y1="490" x2="480" y2="490" stroke="#059669" marker-end="url(#arrow)"/>
+
+          <!-- Phase labels -->
+          <text x="15" y="185" font-size="9" fill="#a3a3a3" font-family="system-ui" transform="rotate(-90 15 185)">PLAN</text>
+          <text x="15" y="295" font-size="9" fill="#a3a3a3" font-family="system-ui" transform="rotate(-90 15 295)">EXECUTE</text>
+          <text x="215" y="395" font-size="9" fill="#a3a3a3" font-family="system-ui" transform="rotate(-90 215 395)">VALIDATE</text>
+          <text x="265" y="495" font-size="9" fill="#a3a3a3" font-family="system-ui" transform="rotate(-90 265 495)">REPORT</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div class="backdrop" id="backdrop" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" onclick="closeDetail()">&times;</button>
+  <div id="detailContent"></div>
+</div>
+
+<script>
+const agents = {
+  'control': {
+    name: 'Control Agent',
+    model: 'Opus',
+    role: 'Orchestrator',
+    description: 'The control agent maintains high-level directional context about the research task. It plans the approach using the research-planner, delegates work to specialists, monitors for drift via plan-validator, and ensures output quality through source-verifier and report-critic.',
+    tools: ['All 9 MCP tools', 'Read', 'Write', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch', 'Agent'],
+    delegates_to: ['research-planner', 'data-extractor', 'financial-analyst', 'research-synthesizer', 'executive-synthesizer', 'flowchart-architect', 'prompt-optimizer', 'source-verifier', 'report-critic', 'plan-validator'],
+    prompt_file: 'src/stratagem/agent.py',
+    phase: 'All phases',
+  },
+  'research-planner': {
+    name: 'research-planner',
+    model: 'Sonnet',
+    role: 'Planning',
+    description: 'Decomposes research questions into structured task plans. Identifies information needs, maps to sources, sequences tasks, and decides whether each task group should use subagents or agent teams.',
+    tools: ['Read', 'WebSearch'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/research_planner.md',
+    phase: 'Phase 1 — Plan',
+    technique: 'Plan-and-execute pattern with subagent vs team decision framework',
+  },
+  'data-extractor': {
+    name: 'data-extractor',
+    model: 'Sonnet',
+    role: 'Specialist',
+    description: 'Precision data extraction from diverse source types: PDFs, web pages, spreadsheets, and presentations. Extracts structured data, verifies consistency, and flags uncertainty.',
+    tools: ['parse_pdf', 'scrape_url', 'read_spreadsheet', 'read_pptx', 'extract_images', 'Read', 'Glob'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/data_extractor.md',
+    phase: 'Phase 2 — Execute',
+  },
+  'financial-analyst': {
+    name: 'financial-analyst',
+    model: 'Opus',
+    role: 'Specialist',
+    description: 'Analyzes SEC filings, earnings reports, and financial statements. Extracts metrics, identifies trends, computes ratios, and produces financial analysis.',
+    tools: ['search_sec_filings', 'download_sec_filing', 'read_spreadsheet', 'parse_pdf', 'Read', 'Write'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/financial_analyst.md',
+    phase: 'Phase 2 — Execute',
+  },
+  'research-synthesizer': {
+    name: 'research-synthesizer',
+    model: 'Opus',
+    role: 'Specialist',
+    description: 'Synthesizes research from multiple extracted data sources into comprehensive, authoritative narratives with citations. Identifies themes, analyzes patterns, and builds coherent analytical prose.',
+    tools: ['Read', 'Write'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/research_synthesizer.md',
+    phase: 'Phase 2 — Execute',
+  },
+  'executive-synthesizer': {
+    name: 'executive-synthesizer',
+    model: 'Opus',
+    role: 'Specialist',
+    description: 'Creates executive-ready research briefs with strategic framing, actionable conclusions, and confidence assessments.',
+    tools: ['Read', 'Write'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/executive_synthesizer.md',
+    phase: 'Phase 2 — Execute',
+  },
+  'flowchart-architect': {
+    name: 'flowchart-architect',
+    model: 'Opus',
+    role: 'Specialist',
+    description: 'Designs financial model architectures and creates flowchart visualizations as PowerPoint presentations.',
+    tools: ['create_pptx', 'Read', 'Write'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/flowchart_architect.md',
+    phase: 'Phase 2 — Execute',
+  },
+  'prompt-optimizer': {
+    name: 'prompt-optimizer',
+    model: 'Opus',
+    role: 'Specialist',
+    description: 'Analyzes, refines, and optimizes research prompts for accuracy, specificity, and reliability.',
+    tools: ['Read', 'Write'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/prompt_optimizer.md',
+    phase: 'Phase 2 — Execute',
+  },
+  'source-verifier': {
+    name: 'source-verifier',
+    model: 'Sonnet',
+    role: 'Verification',
+    description: 'Validates claims against cited sources using an evidence-first pattern. Cross-references assertions, flags unsupported claims, detects hallucination and stale data.',
+    tools: ['scrape_url', 'Read', 'WebSearch'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/source_verifier.md',
+    phase: 'Phase 3 — Validate',
+    technique: 'Chain-of-Verification (CoVe) with evidence-first extraction',
+  },
+  'report-critic': {
+    name: 'report-critic',
+    model: 'Sonnet',
+    role: 'Evaluation',
+    description: 'Evaluates report quality across 5 dimensions: completeness, accuracy, structure, analytical depth, and actionability. Returns scored assessment with specific improvement recommendations.',
+    tools: ['Read'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/report_critic.md',
+    phase: 'Phase 4 — Report',
+    technique: 'Evaluator-optimizer pattern with 1-5 scoring and publication thresholds',
+  },
+  'plan-validator': {
+    name: 'plan-validator',
+    model: 'Sonnet',
+    role: 'Drift Detection',
+    description: 'Monitors research execution for drift using statistical process control methods. Spot-checks subagent outputs against the plan, detects scope/quality/source/goal drift.',
+    tools: ['Read'],
+    delegates_to: [],
+    prompt_file: 'src/stratagem/subagents/prompts/plan_validator.md',
+    phase: 'Phase 3 — Validate',
+    technique: 'Statistical Process Control with Western Electric rules',
+  },
+};
+
+function showDetail(id) {
+  const agent = agents[id];
+  if (!agent) return;
+
+  const modelClass = agent.model === 'Opus' ? 'model-opus' : 'model-sonnet';
+  const roleClass = agent.role === 'Orchestrator' ? 'role-control' : agent.role === 'Specialist' ? 'role-specialist' : 'role-quality';
+
+  let html = `
+    <div class="detail-title">${agent.name}</div>
+    <div style="display:flex; gap:6px; margin-top:6px;">
+      <span class="agent-model ${modelClass}">${agent.model}</span>
+      <span class="agent-role ${roleClass}">${agent.role}</span>
+    </div>
+    <p style="font-size:13px; color:var(--text-secondary); margin-top:12px; line-height:1.6;">${agent.description}</p>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Phase</div>
+      <p style="font-size:12px; color:var(--text-secondary);">${agent.phase}</p>
+    </div>
+  `;
+
+  if (agent.technique) {
+    html += `
+      <div class="detail-section">
+        <div class="detail-section-title">Technique</div>
+        <p style="font-size:12px; color:var(--text-secondary);">${agent.technique}</p>
+      </div>
+    `;
+  }
+
+  html += `
+    <div class="detail-section">
+      <div class="detail-section-title">Tools (${agent.tools.length})</div>
+      <div class="tools-row" style="border-top:none; padding-top:0; margin-top:0;">
+        ${agent.tools.map(t => `<span class="tool-pill">${t}</span>`).join('')}
+      </div>
+    </div>
+  `;
+
+  if (agent.delegates_to && agent.delegates_to.length > 0) {
+    html += `
+      <div class="detail-section">
+        <div class="detail-section-title">Delegates To</div>
+        <ul class="detail-list">
+          ${agent.delegates_to.map(d => `<li>${d}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  html += `
+    <div class="detail-section">
+      <div class="detail-section-title">Prompt File</div>
+      <p style="font-size:11px; color:var(--text-muted); font-family:'SF Mono','Fira Code',monospace;">${agent.prompt_file}</p>
+    </div>
+  `;
+
+  document.getElementById('detailContent').innerHTML = html;
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('backdrop').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('open');
+}
+
+function setView(view) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  document.getElementById('gridView').classList.toggle('active', view === 'grid');
+  document.getElementById('flowView').classList.toggle('active', view === 'flow');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDetail();
+});
+</script>
+</body>
+</html>
