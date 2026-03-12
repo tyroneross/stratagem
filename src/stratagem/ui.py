@@ -282,10 +282,9 @@ body {
     <textarea id="prompt" placeholder="Enter your research question..."></textarea>
     <div class="controls">
       <select id="model">
-        <option value="">Orchestrator: Opus</option>
-        <option value="opus">Orchestrator: Opus</option>
-        <option value="sonnet">Orchestrator: Sonnet</option>
-        <option value="haiku">Orchestrator: Haiku</option>
+        <option value="">Orchestrator: Opus (default)</option>
+        <option value="sonnet">Orchestrator: Sonnet (fast)</option>
+        <option value="haiku">Orchestrator: Haiku (fastest)</option>
       </select>
       <button class="btn btn-primary" id="runBtn" onclick="runQuery()">Run Research</button>
       <button class="btn btn-stop" id="stopBtn" onclick="stopQuery()" style="display:none">Stop</button>

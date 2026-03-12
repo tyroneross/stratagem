@@ -40,6 +40,11 @@ def main():
         help="Working directory for file operations",
     )
     parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Use Sonnet for orchestrator (faster responses, lower cost)",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Only output the final result",
@@ -106,7 +111,8 @@ def main():
 
 def _interactive(args):
     """Interactive REPL — type queries naturally, Ctrl+C or 'exit' to quit."""
-    print("Stratagem v0.1.0 — Market research agent")
+    mode = "fast" if getattr(args, "fast", False) else (args.model or "opus")
+    print(f"Stratagem v0.1.0 — Market research agent [{mode}]")
     print("Type your research question. Ctrl+C or 'exit' to quit.\n")
 
     while True:
@@ -140,6 +146,11 @@ async def _run(args):
     cwd = Path(args.cwd) if args.cwd else Path.cwd()
     verbose = not args.quiet
 
+    # --fast overrides model to sonnet for orchestrator
+    model = args.model
+    if getattr(args, "fast", False) and not model:
+        model = "sonnet"
+
     # Ensure working directories exist
     stratagem_dir = cwd / ".stratagem"
     for subdir in ["cache", "filings", "extractions", "reports"]:
@@ -149,7 +160,7 @@ async def _run(args):
     async for message in run_research(
         prompt=prompt,
         cwd=cwd,
-        model=args.model,
+        model=model,
         max_turns=args.max_turns,
         verbose=verbose,
     ):

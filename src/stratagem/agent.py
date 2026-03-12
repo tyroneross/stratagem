@@ -205,15 +205,111 @@ async def run_research(
         yield message
 
 
+_AGENT_MODELS = {
+    "research-planner": "sonnet",
+    "data-extractor": "sonnet",
+    "financial-analyst": "opus",
+    "research-synthesizer": "opus",
+    "executive-synthesizer": "sonnet",
+    "flowchart-architect": "sonnet",
+    "design-agent": "sonnet",
+    "prompt-optimizer": "sonnet",
+    "plan-validator": "sonnet",
+    "source-verifier": "sonnet",
+    "report-critic": "sonnet",
+}
+
+_AGENT_ACTIONS = {
+    "research-planner": "planning",
+    "data-extractor": "extracting data",
+    "financial-analyst": "analyzing financials",
+    "research-synthesizer": "synthesizing",
+    "executive-synthesizer": "writing brief",
+    "flowchart-architect": "designing visuals",
+    "design-agent": "designing layout",
+    "prompt-optimizer": "refining prompts",
+    "plan-validator": "checking drift",
+    "source-verifier": "verifying sources",
+    "report-critic": "evaluating quality",
+}
+
+# ANSI colors
+_C = {
+    "reset": "\033[0m",
+    "bold": "\033[1m",
+    "dim": "\033[2m",
+    "blue": "\033[34m",
+    "green": "\033[32m",
+    "yellow": "\033[33m",
+    "cyan": "\033[36m",
+    "magenta": "\033[35m",
+    "gray": "\033[90m",
+}
+
+
+def _model_color(model: str) -> str:
+    if model == "opus":
+        return _C["yellow"]
+    if model == "sonnet":
+        return _C["blue"]
+    return _C["green"]
+
+
+def _extract_agent_name(tool_input) -> str | None:
+    """Extract the agent/subagent name from an Agent tool call input."""
+    if isinstance(tool_input, dict):
+        for key in ("agent", "name", "agent_name", "subagent"):
+            if key in tool_input:
+                return tool_input[key]
+        prompt = tool_input.get("prompt", "")
+        if isinstance(prompt, str):
+            for name in _AGENT_ACTIONS:
+                if name in prompt.lower():
+                    return name
+    return None
+
+
+# Track active agents for CLI display
+_active_agents: set[str] = set()
+
+
 def _print_message(message):
-    """Print a message to stdout for CLI usage."""
+    """Print a message to stdout for CLI usage with agent activity tracking."""
     if isinstance(message, AssistantMessage):
         for block in message.content:
             if isinstance(block, TextBlock):
                 print(block.text, end="", flush=True)
             elif isinstance(block, ToolUseBlock):
-                print(f"\n[Tool: {block.name}]", flush=True)
+                if block.name == "Agent":
+                    agent_name = _extract_agent_name(block.input)
+                    if agent_name:
+                        model = _AGENT_MODELS.get(agent_name, "sonnet")
+                        action = _AGENT_ACTIONS.get(agent_name, "working")
+                        mc = _model_color(model)
+                        print(
+                            f"\n{_C['cyan']}▸{_C['reset']} "
+                            f"{_C['bold']}{agent_name}{_C['reset']} "
+                            f"{mc}[{model}]{_C['reset']} "
+                            f"{_C['dim']}{action}{_C['reset']}",
+                            flush=True,
+                        )
+                        _active_agents.add(agent_name)
+                else:
+                    # Non-agent tools shown dimly
+                    print(f"{_C['gray']}  [{block.name}]{_C['reset']}", flush=True)
     elif isinstance(message, ResultMessage):
-        print(f"\n\n--- Done ({message.num_turns} turns, {message.duration_ms}ms) ---")
+        # Clear active agents
+        for name in _active_agents:
+            print(
+                f"{_C['green']}✓{_C['reset']} {name} {_C['dim']}done{_C['reset']}",
+                flush=True,
+            )
+        _active_agents.clear()
+        duration = message.duration_ms
+        if duration > 60000:
+            time_str = f"{duration / 60000:.1f}m"
+        else:
+            time_str = f"{duration / 1000:.1f}s"
+        print(f"\n{_C['green']}━━━ Done{_C['reset']} ({message.num_turns} turns, {time_str})", flush=True)
         if message.total_cost_usd:
-            print(f"Cost: ${message.total_cost_usd:.4f}")
+            print(f"{_C['dim']}Cost: ${message.total_cost_usd:.4f}{_C['reset']}", flush=True)
