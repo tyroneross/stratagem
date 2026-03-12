@@ -27,20 +27,29 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             f"{_S}extract_images",
             "Read",
             "Glob",
+            "WebSearch",  # C4: needs to discover URLs, not just scrape known ones
         ],
         model="sonnet",
     ),
     "research-synthesizer": AgentDefinition(
         description="Synthesize research from multiple extracted data sources into comprehensive, authoritative narratives with citations.",
         prompt=_load_prompt("research_synthesizer"),
-        tools=["Read", "Write"],
+        tools=[
+            "Read",
+            "Write",
+            "WebSearch",  # C3: needs source access for citation verification
+            f"{_S}scrape_url",
+        ],
         model="opus",
     ),
     "executive-synthesizer": AgentDefinition(
         description="Create executive-ready research briefs with strategic framing, actionable conclusions, and confidence assessments.",
         prompt=_load_prompt("executive_synthesizer"),
-        tools=["Read", "Write"],
-        model="opus",
+        tools=[
+            "Read",
+            "Write",
+        ],
+        model="sonnet",  # I3/O1: reformats synthesis output; strong prompt compensates
     ),
     "financial-analyst": AgentDefinition(
         description="Analyze SEC filings, earnings reports, and financial statements. Extracts metrics, identifies trends, and produces financial analysis.",
@@ -52,6 +61,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             f"{_S}parse_pdf",
             "Read",
             "Write",
+            "Bash",  # C2: needed for Python script execution (Calculation Policy)
         ],
         model="opus",
     ),
@@ -63,15 +73,15 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             "Read",
             "Write",
         ],
-        model="opus",
+        model="sonnet",  # I3/O1: generating PPTX structures doesn't need opus
     ),
     "prompt-optimizer": AgentDefinition(
         description="Analyze, refine, and optimize research prompts for accuracy, specificity, and reliability.",
         prompt=_load_prompt("prompt_optimizer"),
         tools=["Read", "Write"],
-        model="opus",
+        model="sonnet",  # I3/O1: structured refinement, not creative task
     ),
-    # ── Architecture-driven agents (from agent best practices research) ──
+    # ── Architecture-driven agents ──
     "research-planner": AgentDefinition(
         description="Decompose research questions into structured task plans. Use BEFORE data gathering to plan the approach, identify information needs, sequence tasks, and define success criteria.",
         prompt=_load_prompt("research_planner"),

@@ -107,7 +107,7 @@ class TestNavGator:
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
         # 11 delegations + 3 feedback + 13 tool uses + 1 control→create_report = 28
-        assert index["stats"]["total_connections"] == 28
+        assert index["stats"]["total_connections"] == 29
 
     def test_graph_nodes_match_components(self, tmp_path):
         import json
@@ -124,4 +124,4 @@ class TestNavGator:
         comp_files = list((arch_dir / "components").glob("COMP_*.json"))
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
         assert len(comp_files) == 21
-        assert len(conn_files) == 28
+        assert len(conn_files) == 29

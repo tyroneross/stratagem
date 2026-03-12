@@ -9,28 +9,12 @@ Usage:
 
 import asyncio
 import json
-import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 # Port default
 DEFAULT_PORT = 8420
-
-# Agent descriptions for display
-AGENT_ACTIONS = {
-    "research-planner": "planning research approach",
-    "data-extractor": "extracting data",
-    "financial-analyst": "analyzing financials",
-    "research-synthesizer": "synthesizing findings",
-    "executive-synthesizer": "creating executive brief",
-    "flowchart-architect": "designing visuals",
-    "design-agent": "designing layout",
-    "prompt-optimizer": "refining prompts",
-    "plan-validator": "checking for drift",
-    "source-verifier": "verifying sources",
-    "report-critic": "evaluating report quality",
-}
 
 # Static HTML served inline (single file, no build step)
 _UI_HTML = """<!DOCTYPE html>
@@ -548,8 +532,10 @@ class StratagemHandler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception as e:
+            import traceback
+            detail = traceback.format_exc()
             try:
-                send_event({"type": "error", "message": str(e)})
+                send_event({"type": "error", "message": f"{e}\n\n{detail}"})
             except Exception:
                 pass
 

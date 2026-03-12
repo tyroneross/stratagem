@@ -1,8 +1,12 @@
 """Main agent setup — configures query() with all tools and subagents."""
 
 import asyncio
+import os
 from pathlib import Path
 from typing import AsyncIterator
+
+# Stratagem is its own agent, not a nested Claude Code session.
+os.environ.pop("CLAUDECODE", None)
 
 from claude_agent_sdk import (
     query,
