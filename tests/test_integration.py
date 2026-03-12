@@ -79,3 +79,48 @@ class TestPluginStructure:
     def test_agent_file_exists(self):
         agent_file = Path(__file__).parent.parent / "plugin" / "agents" / "research-orchestrator" / "AGENT.md"
         assert agent_file.exists()
+
+
+class TestNavGator:
+    def test_generate_architecture(self, tmp_path):
+        from stratagem.navgator import generate_architecture
+        arch_dir = generate_architecture(tmp_path)
+        assert arch_dir.exists()
+        assert (arch_dir / "index.json").exists()
+        assert (arch_dir / "graph.json").exists()
+        assert (arch_dir / "SUMMARY.md").exists()
+
+    def test_component_count(self, tmp_path):
+        import json
+        from stratagem.navgator import generate_architecture
+        arch_dir = generate_architecture(tmp_path)
+        index = json.loads((arch_dir / "index.json").read_text())
+        # 11 agents + 9 tools = 20 components
+        assert index["stats"]["total_components"] == 20
+        assert index["stats"]["components_by_type"]["agent"] == 11
+        assert index["stats"]["components_by_type"]["service"] == 9
+
+    def test_connection_count(self, tmp_path):
+        import json
+        from stratagem.navgator import generate_architecture
+        arch_dir = generate_architecture(tmp_path)
+        index = json.loads((arch_dir / "index.json").read_text())
+        # 10 delegations + 3 feedback + 11 tool uses + 1 control→create_report = 25
+        assert index["stats"]["total_connections"] == 25
+
+    def test_graph_nodes_match_components(self, tmp_path):
+        import json
+        from stratagem.navgator import generate_architecture
+        arch_dir = generate_architecture(tmp_path)
+        index = json.loads((arch_dir / "index.json").read_text())
+        graph = json.loads((arch_dir / "graph.json").read_text())
+        assert len(graph["nodes"]) == index["stats"]["total_components"]
+        assert len(graph["edges"]) == index["stats"]["total_connections"]
+
+    def test_individual_files_written(self, tmp_path):
+        from stratagem.navgator import generate_architecture
+        arch_dir = generate_architecture(tmp_path)
+        comp_files = list((arch_dir / "components").glob("COMP_*.json"))
+        conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
+        assert len(comp_files) == 20
+        assert len(conn_files) == 25

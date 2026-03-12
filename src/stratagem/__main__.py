@@ -40,12 +40,23 @@ def main():
         help="Only output the final result",
     )
     parser.add_argument(
+        "--architecture",
+        action="store_true",
+        help="Generate NavGator-compatible architecture data and exit",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 0.1.0",
     )
 
     args = parser.parse_args()
+
+    if args.architecture:
+        from stratagem.navgator import generate_architecture
+        arch_dir = generate_architecture(args.cwd or Path.cwd())
+        print(f"Architecture data written to {arch_dir}")
+        sys.exit(0)
 
     if not args.prompt:
         # Interactive mode: read from stdin
