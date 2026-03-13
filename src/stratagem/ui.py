@@ -138,7 +138,7 @@ body {
 .status .dot.error { background: var(--error); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-/* ── Progress + Agent Panel ── */
+/* -- Progress Panel -- */
 .progress-panel {
   display: none;
   flex-direction: column;
@@ -182,63 +182,6 @@ body {
   font-weight: 500;
   color: var(--text);
 }
-.agents-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.agent-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-family: var(--mono);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-  transition: opacity 0.3s;
-}
-.agent-chip .agent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1.2s infinite;
-}
-.agent-chip.completed {
-  opacity: 0.5;
-  background: color-mix(in srgb, var(--success) 8%, transparent);
-  color: var(--success);
-  border-color: color-mix(in srgb, var(--success) 15%, transparent);
-}
-.agent-chip.completed .agent-dot {
-  background: var(--success);
-  animation: none;
-}
-.agent-model {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-.agent-model.opus {
-  background: color-mix(in srgb, var(--warn) 15%, transparent);
-  color: var(--warn);
-}
-.agent-model.sonnet {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-}
-.agent-model.haiku {
-  background: color-mix(in srgb, var(--success) 10%, transparent);
-  color: var(--success);
-}
-.agent-action {
-  font-size: 11px;
-  color: var(--text-muted);
-}
 
 .output-area {
   flex: 1;
@@ -259,38 +202,15 @@ body {
 .output-area .tool-use { color: var(--accent); font-weight: 500; }
 .output-area .error { color: var(--error); }
 .output-area .meta { color: var(--text-muted); font-size: 12px; }
-/* ── Tab Navigation ── */
-.tab-nav {
-  display: flex;
-  gap: 24px;
-  margin-left: auto;
-}
-.tab-nav button {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 4px 0;
-  font-family: var(--font);
-  font-size: 14px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.tab-nav button.active {
-  color: var(--text);
-  font-weight: 500;
-  border-bottom: 2px solid var(--accent);
-}
-.tab-panel { display: none; }
-.tab-panel.active { display: flex; flex-direction: column; gap: 20px; }
 
-/* ── Architecture graph ── */
+/* -- Architecture Graph -- */
 .graph-container {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px;
   overflow: auto;
+  max-height: 300px;
 }
 .graph-container svg { width: 100%; height: auto; }
 .graph-container svg text {
@@ -307,17 +227,20 @@ body {
   rx: 6;
   ry: 6;
   fill: var(--surface);
-  transition: opacity 0.2s;
+  opacity: 0.5;
+  transition: all 0.3s;
 }
 .graph-container svg .node-text {
   font-size: 11px;
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
+  opacity: 0.7;
+  transition: opacity 0.3s;
 }
 .graph-container svg .edge-path {
   fill: none;
-  transition: opacity 0.2s;
+  transition: all 0.3s;
 }
 .graph-container svg .dimmed { opacity: 0.15; }
 .graph-loading {
@@ -326,6 +249,50 @@ body {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: 13px;
+}
+
+/* -- Live Node States -- */
+.graph-container .node-group.active .node-rect {
+  opacity: 1;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--node-color));
+  animation: node-glow 1.5s ease-in-out infinite;
+}
+.graph-container .node-group.active .node-text { opacity: 1; }
+.graph-container .node-group.completed .node-rect {
+  opacity: 0.8;
+  stroke: var(--success);
+  fill: color-mix(in srgb, var(--success) 8%, var(--surface));
+  animation: none;
+  filter: none;
+}
+.graph-container .node-group.completed .node-text { opacity: 0.7; }
+.graph-container .node-group.flash .node-rect {
+  opacity: 1;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px var(--node-color));
+}
+.graph-container .node-group.flash .node-text { opacity: 1; }
+@keyframes node-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px var(--node-color)); }
+  50% { filter: drop-shadow(0 0 10px var(--node-color)); }
+}
+
+/* -- Live Edge States -- */
+@keyframes edge-flow {
+  to { stroke-dashoffset: -12; }
+}
+.graph-container .edge-path.active {
+  stroke: var(--accent) !important;
+  stroke-width: 2 !important;
+  stroke-dasharray: 8 4 !important;
+  animation: edge-flow 0.8s linear infinite;
+  opacity: 1 !important;
+}
+.graph-container .edge-path.completed {
+  stroke: var(--success) !important;
+  opacity: 0.5 !important;
+  animation: none;
 }
 
 .footer {
@@ -345,23 +312,18 @@ body {
 <div class="header">
   <h1>Stratagem</h1>
   <span class="version">v0.1.0</span>
-  <nav class="tab-nav">
-    <button class="active" onclick="switchTab('research')">Research</button>
-    <button onclick="switchTab('architecture')">Architecture</button>
-  </nav>
 </div>
 <div class="main">
-  <div id="tab-research" class="tab-panel active">
   <div class="input-area">
-    <textarea id="prompt" placeholder="Enter your research question..."></textarea>
+    <textarea id="prompt" placeholder="Enter your research question..." aria-label="Research question"></textarea>
     <div class="controls">
-      <select id="model">
+      <select id="model" aria-label="Orchestrator model">
         <option value="">Orchestrator: Opus (default)</option>
         <option value="sonnet">Orchestrator: Sonnet (fast)</option>
         <option value="haiku">Orchestrator: Haiku (fastest)</option>
       </select>
-      <button class="btn btn-primary" id="runBtn" onclick="runQuery()">Run Research</button>
-      <button class="btn btn-stop" id="stopBtn" onclick="stopQuery()" style="display:none">Stop</button>
+      <button class="btn btn-primary" id="runBtn" onclick="runQuery()" aria-label="Run research query">Run Research</button>
+      <button class="btn btn-stop" id="stopBtn" onclick="stopQuery()" style="display:none" aria-label="Stop running query">Stop</button>
       <div class="status" id="status" style="margin-left:auto">
         <span class="dot" id="statusDot"></span>
         <span id="statusText">Ready</span>
@@ -369,7 +331,11 @@ body {
     </div>
   </div>
 
-  <div class="progress-panel" id="progressPanel">
+  <div class="graph-container" id="graphContainer">
+    <div class="graph-loading" id="graphLoading">Loading architecture...</div>
+  </div>
+
+  <div class="progress-panel" id="progressPanel" aria-hidden="true">
     <div class="progress-bar-wrap">
       <span class="phase-label" id="phaseLabel">Starting...</span>
       <div class="progress-bar-track">
@@ -377,17 +343,9 @@ body {
       </div>
       <span class="progress-label" id="progressLabel">0%</span>
     </div>
-    <div class="agents-list" id="agentsList"></div>
   </div>
 
   <div class="output-area" id="output"></div>
-  </div><!-- /tab-research -->
-
-  <div id="tab-architecture" class="tab-panel">
-    <div class="graph-container" id="graphContainer">
-      <div class="graph-loading" id="graphLoading">Loading architecture...</div>
-    </div>
-  </div><!-- /tab-architecture -->
 </div>
 <div class="footer">
   Stratagem &mdash; Market research agent powered by Claude
@@ -397,20 +355,13 @@ let eventSource = null;
 const threadId = sessionStorage.getItem('threadId') || ('web_' + Date.now());
 sessionStorage.setItem('threadId', threadId);
 
-// Tab switching
-function switchTab(name) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  document.querySelector('.tab-nav button[onclick*="' + name + '"]').classList.add('active');
-  if (name === 'architecture' && !graphLoaded) loadGraph();
-}
-
 // Phase tracking
 const PHASES = ['Plan', 'Execute', 'Validate', 'Report'];
 let currentPhase = 0;
-let activeAgents = {};   // name -> {action, active}
-let completedAgents = {};
+
+// Live graph state
+let nameToGroup = {};   // agent/tool name -> SVG <g> element
+let nameToEdges = {};   // agent name -> array of edge <path> elements (from control-agent)
 
 function setStatus(state, text) {
   document.getElementById('statusDot').className = 'dot ' + state;
@@ -418,7 +369,9 @@ function setStatus(state, text) {
 }
 
 function showProgress(visible) {
-  document.getElementById('progressPanel').classList.toggle('visible', visible);
+  const panel = document.getElementById('progressPanel');
+  panel.classList.toggle('visible', visible);
+  panel.setAttribute('aria-hidden', !visible);
 }
 
 function updateProgress(phase, pct) {
@@ -427,35 +380,6 @@ function updateProgress(phase, pct) {
   fill.style.width = pct + '%';
   fill.classList.toggle('done', pct >= 100);
   document.getElementById('progressLabel').textContent = Math.round(pct) + '%';
-}
-
-function addAgent(name, action, model) {
-  if (activeAgents[name]) return;
-  activeAgents[name] = { action, model: model || 'sonnet', active: true };
-  renderAgents();
-}
-
-function completeAgent(name) {
-  if (activeAgents[name]) {
-    activeAgents[name].active = false;
-    completedAgents[name] = true;
-    renderAgents();
-  }
-}
-
-function renderAgents() {
-  const el = document.getElementById('agentsList');
-  el.innerHTML = '';
-  for (const [name, info] of Object.entries(activeAgents)) {
-    const chip = document.createElement('div');
-    chip.className = 'agent-chip' + (info.active ? '' : ' completed');
-    const modelTag = '<span class="agent-model ' + info.model + '">' + info.model + '</span>';
-    chip.innerHTML = '<span class="agent-dot"></span>'
-      + '<span>' + escapeHtml(name) + '</span>'
-      + modelTag
-      + '<span class="agent-action">' + escapeHtml(info.action) + '</span>';
-    el.appendChild(chip);
-  }
 }
 
 function detectPhase(text) {
@@ -467,6 +391,66 @@ function detectPhase(text) {
   return null;
 }
 
+// -- Live Graph Functions --
+
+function stripPrefix(name) {
+  // mcp__stratagem__parse_pdf -> parse_pdf
+  if (name.startsWith('mcp__stratagem__')) return name.slice(16);
+  if (name.startsWith('mcp__')) return name.split('__').pop();
+  return name;
+}
+
+function activateNode(name) {
+  const g = nameToGroup[name];
+  if (!g) return;
+  g.classList.remove('completed', 'flash');
+  g.classList.add('active');
+}
+
+function completeNode(name) {
+  const g = nameToGroup[name];
+  if (!g) return;
+  g.classList.remove('active', 'flash');
+  g.classList.add('completed');
+}
+
+function flashTool(name) {
+  const g = nameToGroup[name];
+  if (!g || g.classList.contains('active') || g.classList.contains('completed')) return;
+  g.classList.add('flash');
+  setTimeout(function() { g.classList.remove('flash'); }, 600);
+}
+
+function activateEdge(srcName, tgtName) {
+  const container = document.getElementById('graphContainer');
+  container.querySelectorAll('.edge-path').forEach(function(ep) {
+    if (ep.dataset.srcName === srcName && ep.dataset.tgtName === tgtName) {
+      ep.classList.remove('completed');
+      ep.classList.add('active');
+    }
+  });
+}
+
+function completeEdge(srcName, tgtName) {
+  const container = document.getElementById('graphContainer');
+  container.querySelectorAll('.edge-path').forEach(function(ep) {
+    if (ep.dataset.srcName === srcName && ep.dataset.tgtName === tgtName) {
+      ep.classList.remove('active');
+      ep.classList.add('completed');
+    }
+  });
+}
+
+function resetNodes() {
+  const container = document.getElementById('graphContainer');
+  container.querySelectorAll('.node-group').forEach(function(g) {
+    g.classList.remove('active', 'completed', 'flash');
+  });
+  container.querySelectorAll('.edge-path').forEach(function(ep) {
+    ep.classList.remove('active', 'completed');
+  });
+}
+
 function runQuery() {
   const prompt = document.getElementById('prompt').value.trim();
   if (!prompt) return;
@@ -474,9 +458,10 @@ function runQuery() {
   const model = document.getElementById('model').value;
   const output = document.getElementById('output');
   output.innerHTML = '';
-  activeAgents = {};
-  completedAgents = {};
   currentPhase = 0;
+
+  // Reset graph nodes to idle
+  resetNodes();
 
   document.getElementById('runBtn').disabled = true;
   document.getElementById('runBtn').style.display = 'none';
@@ -484,7 +469,6 @@ function runQuery() {
   setStatus('running', 'Running...');
   showProgress(true);
   updateProgress('Starting...', 2);
-  renderAgents();
 
   const params = new URLSearchParams({ prompt, thread_id: threadId });
   if (model) params.set('model', model);
@@ -502,20 +486,30 @@ function runQuery() {
         updateProgress(phase.label, ((phase.idx + 1) / PHASES.length) * 85 + 5);
       }
     } else if (data.type === 'agent_start') {
-      addAgent(data.name, data.action, data.model);
+      activateNode(data.name);
+      activateNode('control-agent');
+      activateEdge('control-agent', data.name);
       if (currentPhase === 0 && data.name !== 'research-planner') {
         currentPhase = 1;
         updateProgress('Phase 2: Executing', 30);
       }
     } else if (data.type === 'agent_end') {
-      completeAgent(data.name);
+      completeNode(data.name);
+      completeEdge('control-agent', data.name);
     } else if (data.type === 'tool') {
-      // Show non-agent tools subtly
       if (!data.is_agent) {
+        const toolName = stripPrefix(data.name);
+        flashTool(toolName);
         output.innerHTML += '<span class="tool-use">[' + escapeHtml(data.name) + ']</span>\\n';
       }
     } else if (data.type === 'done') {
       updateProgress('Complete', 100);
+      completeNode('control-agent');
+      // Complete any remaining active nodes
+      Object.keys(nameToGroup).forEach(function(name) {
+        const g = nameToGroup[name];
+        if (g.classList.contains('active')) completeNode(name);
+      });
       const meta = '\\n<span class="meta">--- Done (' + data.turns + ' turns, ' + data.duration_ms + 'ms)';
       const meta_str = data.cost ? meta + ' | $' + data.cost + '</span>' : meta + '</span>';
       output.innerHTML += meta_str;
@@ -545,8 +539,11 @@ function finish(state, text) {
   document.getElementById('stopBtn').style.display = 'none';
   setStatus(state, text);
   if (state === 'done') {
-    // Mark all remaining agents as complete
-    for (const name of Object.keys(activeAgents)) completeAgent(name);
+    // Complete all remaining active nodes
+    Object.keys(nameToGroup).forEach(function(name) {
+      const g = nameToGroup[name];
+      if (g.classList.contains('active')) completeNode(name);
+    });
   }
 }
 
@@ -564,8 +561,7 @@ document.getElementById('prompt').addEventListener('keydown', function(e) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
 });
 
-// ── Architecture Graph ──
-let graphLoaded = false;
+// -- Architecture Graph --
 
 async function loadGraph() {
   const container = document.getElementById('graphContainer');
@@ -574,9 +570,8 @@ async function loadGraph() {
     const res = await fetch('/api/graph');
     if (!res.ok) throw new Error('Failed to load graph');
     const data = await res.json();
-    loading.style.display = 'none';
+    loading.remove();
     renderGraph(data, container);
-    graphLoaded = true;
   } catch (e) {
     loading.textContent = 'Failed to load architecture: ' + e.message;
   }
@@ -590,7 +585,7 @@ function renderGraph(data, container) {
   // Classify nodes into layers
   const layers = [[], [], []]; // 0=control, 1=agents, 2=tools
   const nodeMap = {};
-  nodes.forEach(n => {
+  nodes.forEach(function(n) {
     nodeMap[n.id] = n;
     if (n.name === 'control-agent') { n._layer = 0; layers[0].push(n); }
     else if (n.type === 'agent') { n._layer = 1; layers[1].push(n); }
@@ -606,25 +601,25 @@ function renderGraph(data, container) {
 
   // Position nodes horizontally within each layer
   const positions = {};
-  layers.forEach((layer, li) => {
-    const [w] = NODE_SIZES[li];
+  layers.forEach(function(layer, li) {
+    const w = NODE_SIZES[li][0];
     const gap = li === 2 ? 12 : 20;
     const totalW = layer.length * w + (layer.length - 1) * gap;
     const startX = PAD + (li === 0 ? (Math.max(layers[1].length, layers[2].length) * (NODE_SIZES[1][0] + 20) - totalW) / 2 : 0);
-    layer.forEach((n, i) => {
-      positions[n.id] = { x: startX + i * (w + gap) + w / 2, y: LAYER_Y[li], w, h: NODE_SIZES[li][1] };
+    layer.forEach(function(n, i) {
+      positions[n.id] = { x: startX + i * (w + gap) + w / 2, y: LAYER_Y[li], w: w, h: NODE_SIZES[li][1] };
     });
   });
 
   // Calculate SVG dimensions
-  let maxX = PAD;
-  Object.values(positions).forEach(p => { if (p.x + p.w / 2 + PAD > maxX) maxX = p.x + p.w / 2 + PAD; });
+  var maxX = PAD;
+  Object.values(positions).forEach(function(p) { if (p.x + p.w / 2 + PAD > maxX) maxX = p.x + p.w / 2 + PAD; });
   const svgW = Math.max(maxX, 800);
   const svgH = LAYER_Y[2] + 60;
 
   // Build edge connection map for hover
   const connMap = {}; // nodeId -> Set of connected nodeIds
-  edges.forEach(e => {
+  edges.forEach(function(e) {
     if (!connMap[e.source]) connMap[e.source] = new Set();
     if (!connMap[e.target]) connMap[e.target] = new Set();
     connMap[e.source].add(e.target);
@@ -645,49 +640,52 @@ function renderGraph(data, container) {
   // Edge style
   function edgeStyle(type) {
     if (type === 'service-call') {
-      // Check if it's agent delegation or tool usage by looking at semantic
       return { dash: '', width: 1.5, color: 'var(--text-muted)' };
     }
     return { dash: '4 3', width: 1, color: 'var(--text-muted)' };
   }
 
   // Build SVG
-  let svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + svgW + ' ' + svgH + '">';
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + svgW + ' ' + svgH + '">';
 
   // Arrowhead marker
   svg += '<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">';
   svg += '<path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-muted)" /></marker></defs>';
 
   // Layer labels
-  LAYER_LABELS.forEach((label, i) => {
+  LAYER_LABELS.forEach(function(label, i) {
     svg += '<text x="12" y="' + (LAYER_Y[i] + 4) + '" class="layer-label">' + label + '</text>';
   });
 
-  // Edges
-  edges.forEach(e => {
+  // Edges — include data-src-name and data-tgt-name for live wiring
+  edges.forEach(function(e) {
     const src = positions[e.source], tgt = positions[e.target];
     if (!src || !tgt) return;
+    const srcNode = nodeMap[e.source], tgtNode = nodeMap[e.target];
+    const srcName = srcNode ? srcNode.name : '';
+    const tgtName = tgtNode ? tgtNode.name : '';
     const connType = e.type || 'service-call';
     const isFeedback = connType === 'service-call' && src.y > tgt.y;
     const style = isFeedback ? { dash: '6 3', width: 1.5, color: 'var(--text-muted)' } : edgeStyle(connType);
-    const isToolConn = tgt.y > src.y && nodeMap[e.target] && nodeMap[e.target].type === 'service';
+    const isToolConn = tgt.y > src.y && tgtNode && tgtNode.type === 'service';
     if (isToolConn) { style.dash = '2 2'; style.width = 1; }
 
     // Quadratic bezier
     const midY = (src.y + tgt.y) / 2;
     const d = 'M ' + src.x + ' ' + (src.y + src.h / 2) + ' Q ' + src.x + ' ' + midY + ' ' + tgt.x + ' ' + (tgt.y - tgt.h / 2);
-    svg += '<path class="edge-path" data-src="' + escapeAttr(e.source) + '" data-tgt="' + escapeAttr(e.target) + '" d="' + d + '" ';
-    svg += 'stroke="' + style.color + '" stroke-width="' + style.width + '"';
+    svg += '<path class="edge-path" data-src="' + escapeAttr(e.source) + '" data-tgt="' + escapeAttr(e.target) + '"';
+    svg += ' data-src-name="' + escapeAttr(srcName) + '" data-tgt-name="' + escapeAttr(tgtName) + '"';
+    svg += ' d="' + d + '" stroke="' + style.color + '" stroke-width="' + style.width + '"';
     if (style.dash) svg += ' stroke-dasharray="' + style.dash + '"';
     svg += ' marker-end="url(#arrow)" />';
   });
 
-  // Nodes
-  nodes.forEach(n => {
+  // Nodes — include data-name and --node-color for live wiring
+  nodes.forEach(function(n) {
     const p = positions[n.id];
     if (!p) return;
     const color = nodeColor(n);
-    svg += '<g class="node-group" data-id="' + escapeAttr(n.id) + '">';
+    svg += '<g class="node-group" data-id="' + escapeAttr(n.id) + '" data-name="' + escapeAttr(n.name) + '" style="--node-color: ' + color + '">';
     svg += '<rect class="node-rect" x="' + (p.x - p.w / 2) + '" y="' + (p.y - p.h / 2) + '" width="' + p.w + '" height="' + p.h + '" stroke="' + color + '" />';
     // Truncate long names
     const label = n.name.length > 16 ? n.name.slice(0, 15) + '...' : n.name;
@@ -698,23 +696,44 @@ function renderGraph(data, container) {
   svg += '</svg>';
   container.innerHTML = svg;
 
-  // Hover interactivity
-  container.querySelectorAll('.node-group').forEach(g => {
-    g.addEventListener('mouseenter', () => {
+  // Build nameToGroup map for live wiring
+  nameToGroup = {};
+  container.querySelectorAll('.node-group').forEach(function(g) {
+    const name = g.dataset.name;
+    if (name) nameToGroup[name] = g;
+  });
+
+  // Build nameToEdges map
+  nameToEdges = {};
+  container.querySelectorAll('.edge-path').forEach(function(ep) {
+    const src = ep.dataset.srcName;
+    const tgt = ep.dataset.tgtName;
+    if (src && tgt) {
+      if (!nameToEdges[src]) nameToEdges[src] = [];
+      nameToEdges[src].push({ edge: ep, target: tgt });
+    }
+  });
+
+  // Hover interactivity (works alongside live states)
+  container.querySelectorAll('.node-group').forEach(function(g) {
+    g.addEventListener('mouseenter', function() {
       const id = g.dataset.id;
       const connected = connMap[id] || new Set();
-      container.querySelectorAll('.node-group').forEach(ng => {
+      container.querySelectorAll('.node-group').forEach(function(ng) {
         ng.querySelector('.node-rect').classList.toggle('dimmed', ng.dataset.id !== id && !connected.has(ng.dataset.id));
       });
-      container.querySelectorAll('.edge-path').forEach(ep => {
+      container.querySelectorAll('.edge-path').forEach(function(ep) {
         ep.classList.toggle('dimmed', ep.dataset.src !== id && ep.dataset.tgt !== id);
       });
     });
-    g.addEventListener('mouseleave', () => {
-      container.querySelectorAll('.dimmed').forEach(el => el.classList.remove('dimmed'));
+    g.addEventListener('mouseleave', function() {
+      container.querySelectorAll('.dimmed').forEach(function(el) { el.classList.remove('dimmed'); });
     });
   });
 }
+
+// Load graph on page init
+loadGraph();
 </script>
 </body>
 </html>"""
