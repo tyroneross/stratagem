@@ -51,7 +51,7 @@ You are the **control agent** — you plan, delegate, track progress, and ensure
 **Document Processing**: parse_pdf, read_spreadsheet, read_pptx, create_pptx, extract_images
 **Web**: scrape_url, WebSearch, WebFetch
 **SEC EDGAR**: search_sec_filings, download_sec_filing
-**Report Generation**: create_report (markdown, pptx, html, docx)
+**Report Generation**: create_report (markdown, pptx, html, docx), create_spreadsheet (xlsx)
 **File Operations**: Read, Write, Glob, Grep
 **Computation**: Bash (for running Python scripts)
 
@@ -156,7 +156,7 @@ For tasks requiring cross-referencing, competing hypotheses, or adversarial revi
 
 ## Output Standards
 
-- All reports saved to `.stratagem/reports/`
+- All reports and artifacts saved to `.stratagem/artifacts/`
 - Default: both markdown AND docx
 - Pyramid Principle structure mandatory
 - Source citations [N] for every factual claim
@@ -173,6 +173,7 @@ async def run_research(
     model: str | None = None,
     max_turns: int | None = None,
     verbose: bool = False,
+    thread_id: str | None = None,
 ) -> AsyncIterator:
     """Run a research query using the full Stratagem agent pipeline.
 
@@ -182,27 +183,71 @@ async def run_research(
         model: Model to use (e.g., 'opus', 'sonnet')
         max_turns: Maximum agentic turns
         verbose: Print messages as they stream
+        thread_id: Optional thread ID for context retention across queries
 
     Yields:
         Messages from the agent
     """
+    effective_cwd = Path(cwd) if cwd else Path.cwd()
+
+    # Inject prior thread context into system prompt
+    system = SYSTEM_PROMPT
+    if thread_id:
+        from stratagem.threads import load_context
+        ctx = load_context(thread_id, cwd=effective_cwd)
+        if ctx:
+            system += (
+                "\n\n## Prior Research Context\n\n"
+                + ctx
+                + "\n\nUse this context to inform your response. "
+                "Prior artifacts are in `.stratagem/artifacts/`."
+            )
+
     server = create_stratagem_server()
 
     options = ClaudeAgentOptions(
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system,
         mcp_servers={"stratagem": server},
         allowed_tools=get_all_allowed_tools(),
         permission_mode="acceptEdits",
         agents=SUBAGENTS,
-        cwd=str(cwd) if cwd else str(Path.cwd()),
+        cwd=str(effective_cwd),
         model=model or "opus",  # Control agent uses latest frontier model
         max_turns=max_turns,
     )
 
+    # Accumulate result data for thread persistence
+    result_text = ""
+    turn_count = 0
+    cost_usd = None
+
     async for message in query(prompt=prompt, options=options):
+        # Collect data for thread entry
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    result_text += block.text
+        elif isinstance(message, ResultMessage):
+            turn_count = message.num_turns
+            cost_usd = message.total_cost_usd
+
         if verbose:
             _print_message(message)
         yield message
+
+    # Persist thread entry after completion
+    if thread_id:
+        from stratagem.threads import append_entry
+        # Use last 500 chars as summary (the agent's final output)
+        summary = result_text[-500:] if len(result_text) > 500 else result_text
+        append_entry(
+            thread_id,
+            cwd=effective_cwd,
+            query=prompt,
+            summary=summary,
+            turns=turn_count,
+            cost=cost_usd,
+        )
 
 
 _AGENT_MODELS = {

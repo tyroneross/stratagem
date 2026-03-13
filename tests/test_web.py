@@ -1,6 +1,5 @@
 """Tests for web scraping tool."""
 
-import pytest
 from stratagem.tools.web import _extract_title, _html_table_to_markdown
 
 

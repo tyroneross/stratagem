@@ -1,6 +1,5 @@
 """Tests for PDF parsing tool."""
 
-import pytest
 import asyncio
 from pathlib import Path
 
@@ -40,7 +39,6 @@ class TestTableToMarkdown:
 
 
 class TestParsePdf:
-    @pytest.mark.asyncio
     async def test_missing_file(self):
         result = await parse_pdf({"file_path": "/nonexistent/file.pdf"})
         assert result.get("isError")

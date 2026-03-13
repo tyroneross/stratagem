@@ -1,6 +1,5 @@
 """Tests for spreadsheet parsing tool."""
 
-import pytest
 from stratagem.tools.spreadsheet import read_spreadsheet as _read_spreadsheet_tool, _rows_to_markdown
 
 read_spreadsheet = _read_spreadsheet_tool.handler
@@ -23,12 +22,10 @@ class TestRowsToMarkdown:
 
 
 class TestReadSpreadsheet:
-    @pytest.mark.asyncio
     async def test_missing_file(self):
         result = await read_spreadsheet({"file_path": "/nonexistent/file.xlsx"})
         assert result.get("isError")
 
-    @pytest.mark.asyncio
     async def test_unsupported_format(self, tmp_path):
         # Create a real file with unsupported extension
         txt_file = tmp_path / "test.txt"

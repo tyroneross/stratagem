@@ -1,18 +1,19 @@
-"""SEC EDGAR tools — search and download SEC filings."""
+"""SEC EDGAR tools — search and download SEC filings.
+
+Uses direct SEC REST API calls via sec_client.py (replaces edgartools).
+"""
 
 from typing import Any
 from pathlib import Path
 
 from claude_agent_sdk import tool
 
-
-def _ensure_edgar_identity():
-    """Set SEC EDGAR User-Agent identity if not already configured."""
-    try:
-        from edgar import set_identity
-        set_identity("Stratagem Research stratagem@example.com")
-    except Exception:
-        pass
+from stratagem.tools.sec_client import (
+    resolve_ticker,
+    get_filings,
+    download_filing,
+    filing_to_markdown,
+)
 
 
 @tool(
@@ -34,45 +35,30 @@ async def search_sec_filings(args: dict[str, Any]) -> dict[str, Any]:
     limit = args.get("limit", 5)
 
     try:
-        from edgar import Company
-    except ImportError:
-        return _error("edgartools not installed. Run: pip install edgartools")
-
-    _ensure_edgar_identity()
-
-    try:
-        company = Company(ticker)
+        company = await resolve_ticker(ticker)
+    except ValueError as e:
+        return _error(str(e))
     except Exception as e:
         return _error(f"Failed to look up {ticker}: {e}")
 
     try:
-        filings = company.get_filings(form=form_type)
+        filings = await get_filings(company["cik"], form_type, limit)
     except Exception as e:
         return _error(f"Failed to search filings for {ticker}: {e}")
 
     sections = [
         f"# SEC Filings: {ticker} ({form_type})",
-        f"**Company**: {company.name}",
-        f"**CIK**: {company.cik}",
+        f"**Company**: {company['name']}",
+        f"**CIK**: {company['cik']}",
         "",
     ]
 
-    results = []
     for i, filing in enumerate(filings):
-        if i >= limit:
-            break
-        info = {
-            "index": i,
-            "form": str(getattr(filing, "form", form_type)),
-            "filed": str(getattr(filing, "filing_date", "unknown")),
-            "accession": str(getattr(filing, "accession_no", "unknown")),
-        }
-        results.append(info)
-        sections.append(f"### [{i}] {info['form']} — Filed {info['filed']}")
-        sections.append(f"Accession: {info['accession']}")
+        sections.append(f"### [{i}] {filing['form']} — Filed {filing['filing_date']}")
+        sections.append(f"Accession: {filing['accession_no']}")
         sections.append("")
 
-    if not results:
+    if not filings:
         sections.append(f"No {form_type} filings found for {ticker}.")
 
     sections.append(f"\n*Use `download_sec_filing` with ticker='{ticker}' and filing_index=N to download a specific filing.*")
@@ -101,128 +87,57 @@ async def download_sec_filing(args: dict[str, Any]) -> dict[str, Any]:
     output_dir = args.get("output_dir", ".stratagem/filings")
 
     try:
-        from edgar import Company
-    except ImportError:
-        return _error("edgartools not installed. Run: pip install edgartools")
-
-    _ensure_edgar_identity()
+        company = await resolve_ticker(ticker)
+    except ValueError as e:
+        return _error(str(e))
+    except Exception as e:
+        return _error(f"Failed to look up {ticker}: {e}")
 
     try:
-        company = Company(ticker)
-        filings = company.get_filings(form=form_type)
+        filings = await get_filings(company["cik"], form_type, limit=filing_index + 1)
     except Exception as e:
-        return _error(f"Failed to look up filings for {ticker}: {e}")
+        return _error(f"Failed to search filings for {ticker}: {e}")
 
-    # Get the specific filing
-    target = None
-    count = 0
-    for count_i, filing in enumerate(filings):
-        count = count_i + 1
-        if count_i == filing_index:
-            target = filing
-            break
+    if filing_index >= len(filings):
+        return _error(f"Filing index {filing_index} not found. {len(filings)} {form_type} filings available.")
 
-    if target is None:
-        return _error(f"Filing index {filing_index} not found. {count} {form_type} filings available.")
+    filing = filings[filing_index]
+    accession_no = filing["accession_no"]
+    primary_doc = filing["primary_doc"]
+    filed_date = filing["filing_date"]
 
-    # Create output directory
+    # Download the filing
+    try:
+        html_content = await download_filing(company["cik"], accession_no, primary_doc)
+    except Exception as e:
+        return _error(f"Failed to download filing: {e}")
+
+    # Convert to markdown
+    md_content = filing_to_markdown(html_content)
+
+    # Save both HTML and markdown
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    filed_date = str(getattr(target, "filing_date", "unknown"))
-    accession = str(getattr(target, "accession_no", "unknown")).replace("-", "")
+    html_filename = f"{ticker}_{form_type}_{filed_date}.html"
+    md_filename = f"{ticker}_{form_type}_{filed_date}.md"
 
-    # Try to get the filing document
-    try:
-        # Try to get the HTML/text content of the filing
-        filing_obj = target.obj()
+    html_path = out_dir / html_filename
+    md_path = out_dir / md_filename
 
-        # Save as HTML if available
-        html_content = None
-        if hasattr(filing_obj, "html"):
-            html_content = filing_obj.html()
-        elif hasattr(filing_obj, "text"):
-            html_content = filing_obj.text()
-        elif hasattr(filing_obj, "markdown"):
-            html_content = filing_obj.markdown()
+    html_path.write_text(html_content, encoding="utf-8")
+    md_path.write_text(md_content, encoding="utf-8")
 
-        if html_content:
-            filename = f"{ticker}_{form_type}_{filed_date}.html"
-            filepath = out_dir / filename
-            filepath.write_text(html_content, encoding="utf-8")
-
-            return {"content": [{"type": "text", "text": "\n".join([
-                f"# Downloaded: {ticker} {form_type}",
-                f"**Filed**: {filed_date}",
-                f"**Accession**: {accession}",
-                f"**Saved to**: {filepath}",
-                f"**Size**: {filepath.stat().st_size:,} bytes",
-                "",
-                f"Use `Read` tool to view the content at: {filepath}",
-            ])}]}
-
-    except Exception as e:
-        # Primary download method failed, try fallback approaches
-        primary_error = str(e)
-
-    # Fallback: try to get attachments/documents
-    try:
-        documents = list(target.attachments) if hasattr(target, "attachments") else []
-        if not documents and hasattr(target, "documents"):
-            documents = list(target.documents)
-
-        saved_files = []
-        for doc in documents[:5]:  # Limit to first 5 documents
-            try:
-                doc_name = getattr(doc, "document", getattr(doc, "filename", f"doc_{len(saved_files)}"))
-                doc_content = doc.download() if hasattr(doc, "download") else str(doc)
-
-                filename = f"{ticker}_{form_type}_{filed_date}_{doc_name}"
-                # Sanitize filename
-                filename = "".join(c for c in filename if c.isalnum() or c in "._-")
-                filepath = out_dir / filename
-
-                if isinstance(doc_content, bytes):
-                    filepath.write_bytes(doc_content)
-                else:
-                    filepath.write_text(str(doc_content), encoding="utf-8")
-
-                saved_files.append(str(filepath))
-            except Exception:
-                continue  # Skip individual documents that fail to download
-
-        if saved_files:
-            sections = [
-                f"# Downloaded: {ticker} {form_type}",
-                f"**Filed**: {filed_date}",
-                f"**Files saved**:",
-            ]
-            for f in saved_files:
-                sections.append(f"  - {f}")
-            sections.append("")
-            sections.append("Use `parse_pdf` or `Read` to extract content from these files.")
-            return {"content": [{"type": "text", "text": "\n".join(sections)}]}
-
-    except Exception:
-        pass  # Attachment download failed, try text fallback
-
-    # Last resort: save whatever text representation we can get
-    try:
-        text_repr = str(target)
-        filename = f"{ticker}_{form_type}_{filed_date}.txt"
-        filepath = out_dir / filename
-        filepath.write_text(text_repr, encoding="utf-8")
-
-        return {"content": [{"type": "text", "text": "\n".join([
-            f"# Downloaded: {ticker} {form_type}",
-            f"**Filed**: {filed_date}",
-            f"**Saved to**: {filepath} (text representation)",
-            "",
-            "Note: Could not download the full filing document. The text representation has been saved.",
-            f"Use `Read` to view: {filepath}",
-        ])}]}
-    except Exception as e:
-        return _error(f"Failed to download filing: {e}")
+    return {"content": [{"type": "text", "text": "\n".join([
+        f"# Downloaded: {ticker} {form_type}",
+        f"**Filed**: {filed_date}",
+        f"**Accession**: {accession_no}",
+        f"**Saved to**: {html_path}",
+        f"**Markdown**: {md_path}",
+        f"**Size**: {html_path.stat().st_size:,} bytes (HTML), {md_path.stat().st_size:,} bytes (markdown)",
+        "",
+        f"Use `Read` tool to view the markdown at: {md_path}",
+    ])}]}
 
 
 def _error(msg: str) -> dict[str, Any]:

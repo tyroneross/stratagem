@@ -66,6 +66,12 @@ def main():
         help="Generate NavGator-compatible architecture data and exit",
     )
     parser.add_argument(
+        "--thread",
+        type=str,
+        default=None,
+        help="Thread ID for context retention (resume or name a thread)",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 0.1.0",
@@ -111,8 +117,16 @@ def main():
 
 def _interactive(args):
     """Interactive REPL — type queries naturally, Ctrl+C or 'exit' to quit."""
+    from datetime import datetime as _dt
+
     mode = "fast" if getattr(args, "fast", False) else (args.model or "opus")
+
+    # Generate or resume thread
+    thread_id = getattr(args, "thread", None) or f"cli_{_dt.now():%Y%m%d_%H%M%S}"
+    args.thread = thread_id
+
     print(f"Stratagem v0.1.0 — Market research agent [{mode}]")
+    print(f"Thread: {thread_id}")
     print("Type your research question. Ctrl+C or 'exit' to quit.\n")
 
     while True:
@@ -145,6 +159,7 @@ async def _run(args):
     prompt = args.prompt if isinstance(args.prompt, str) else " ".join(args.prompt)
     cwd = Path(args.cwd) if args.cwd else Path.cwd()
     verbose = not args.quiet
+    thread_id = getattr(args, "thread", None)
 
     # --fast overrides model to sonnet for orchestrator
     model = args.model
@@ -153,9 +168,14 @@ async def _run(args):
 
     # Ensure working directories exist
     stratagem_dir = cwd / ".stratagem"
-    for subdir in ["cache", "filings", "extractions", "reports"]:
+    for subdir in ["cache", "filings", "extractions", "reports", "threads", "artifacts"]:
         (stratagem_dir / subdir).mkdir(parents=True, exist_ok=True)
     (cwd / "output").mkdir(parents=True, exist_ok=True)
+
+    # Create thread if specified
+    if thread_id:
+        from stratagem.threads import create_thread
+        create_thread(thread_id, cwd)
 
     async for message in run_research(
         prompt=prompt,
@@ -163,6 +183,7 @@ async def _run(args):
         model=model,
         max_turns=args.max_turns,
         verbose=verbose,
+        thread_id=thread_id,
     ):
         pass  # Messages are printed in verbose mode by run_research
 

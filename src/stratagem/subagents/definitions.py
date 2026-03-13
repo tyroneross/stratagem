@@ -25,6 +25,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             f"{_S}read_spreadsheet",
             f"{_S}read_pptx",
             f"{_S}extract_images",
+            f"{_S}create_spreadsheet",
             "Read",
             "Glob",
             "WebSearch",  # C4: needs to discover URLs, not just scrape known ones
@@ -59,6 +60,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             f"{_S}download_sec_filing",
             f"{_S}read_spreadsheet",
             f"{_S}parse_pdf",
+            f"{_S}create_spreadsheet",
             "Read",
             "Write",
             "Bash",  # C2: needed for Python script execution (Calculation Policy)

@@ -259,6 +259,75 @@ body {
 .output-area .tool-use { color: var(--accent); font-weight: 500; }
 .output-area .error { color: var(--error); }
 .output-area .meta { color: var(--text-muted); font-size: 12px; }
+/* ── Tab Navigation ── */
+.tab-nav {
+  display: flex;
+  gap: 24px;
+  margin-left: auto;
+}
+.tab-nav button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 4px 0;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-nav button.active {
+  color: var(--text);
+  font-weight: 500;
+  border-bottom: 2px solid var(--accent);
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: flex; flex-direction: column; gap: 20px; }
+
+/* ── Architecture graph ── */
+.graph-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  overflow: auto;
+}
+.graph-container svg { width: 100%; height: auto; }
+.graph-container svg text {
+  font-family: var(--mono);
+  fill: var(--text);
+}
+.graph-container svg .layer-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-weight: 500;
+}
+.graph-container svg .node-rect {
+  stroke-width: 2;
+  rx: 6;
+  ry: 6;
+  fill: var(--surface);
+  transition: opacity 0.2s;
+}
+.graph-container svg .node-text {
+  font-size: 11px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.graph-container svg .edge-path {
+  fill: none;
+  transition: opacity 0.2s;
+}
+.graph-container svg .dimmed { opacity: 0.15; }
+.graph-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
 .footer {
   padding: 12px 24px;
   border-top: 1px solid var(--border);
@@ -276,8 +345,13 @@ body {
 <div class="header">
   <h1>Stratagem</h1>
   <span class="version">v0.1.0</span>
+  <nav class="tab-nav">
+    <button class="active" onclick="switchTab('research')">Research</button>
+    <button onclick="switchTab('architecture')">Architecture</button>
+  </nav>
 </div>
 <div class="main">
+  <div id="tab-research" class="tab-panel active">
   <div class="input-area">
     <textarea id="prompt" placeholder="Enter your research question..."></textarea>
     <div class="controls">
@@ -307,12 +381,30 @@ body {
   </div>
 
   <div class="output-area" id="output"></div>
+  </div><!-- /tab-research -->
+
+  <div id="tab-architecture" class="tab-panel">
+    <div class="graph-container" id="graphContainer">
+      <div class="graph-loading" id="graphLoading">Loading architecture...</div>
+    </div>
+  </div><!-- /tab-architecture -->
 </div>
 <div class="footer">
   Stratagem &mdash; Market research agent powered by Claude
 </div>
 <script>
 let eventSource = null;
+const threadId = sessionStorage.getItem('threadId') || ('web_' + Date.now());
+sessionStorage.setItem('threadId', threadId);
+
+// Tab switching
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelector('.tab-nav button[onclick*="' + name + '"]').classList.add('active');
+  if (name === 'architecture' && !graphLoaded) loadGraph();
+}
 
 // Phase tracking
 const PHASES = ['Plan', 'Execute', 'Validate', 'Report'];
@@ -394,7 +486,7 @@ function runQuery() {
   updateProgress('Starting...', 2);
   renderAgents();
 
-  const params = new URLSearchParams({ prompt });
+  const params = new URLSearchParams({ prompt, thread_id: threadId });
   if (model) params.set('model', model);
   eventSource = new EventSource('/api/research?' + params.toString());
 
@@ -467,6 +559,158 @@ function escapeHtml(text) {
 document.getElementById('prompt').addEventListener('keydown', function(e) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
 });
+
+// ── Architecture Graph ──
+let graphLoaded = false;
+
+async function loadGraph() {
+  const container = document.getElementById('graphContainer');
+  const loading = document.getElementById('graphLoading');
+  try {
+    const res = await fetch('/api/graph');
+    if (!res.ok) throw new Error('Failed to load graph');
+    const data = await res.json();
+    loading.style.display = 'none';
+    renderGraph(data, container);
+    graphLoaded = true;
+  } catch (e) {
+    loading.textContent = 'Failed to load architecture: ' + e.message;
+  }
+}
+
+function renderGraph(data, container) {
+  const nodes = data.nodes || [];
+  const edges = data.edges || [];
+  if (!nodes.length) { container.innerHTML = '<div class="graph-loading">No architecture data</div>'; return; }
+
+  // Classify nodes into layers
+  const layers = [[], [], []]; // 0=control, 1=agents, 2=tools
+  const nodeMap = {};
+  nodes.forEach(n => {
+    nodeMap[n.id] = n;
+    if (n.name === 'control-agent') { n._layer = 0; layers[0].push(n); }
+    else if (n.type === 'agent') { n._layer = 1; layers[1].push(n); }
+    else { n._layer = 2; layers[2].push(n); }
+  });
+
+  // Layout constants
+  const PAD = 80, LAYER_Y = [60, 220, 380];
+  const LAYER_LABELS = ['Orchestrator', 'Subagents', 'Tools'];
+  const NODE_SIZES = { 0: [140, 44], 1: [110, 36], 2: [100, 32] };
+  const NODE_COLORS = { 0: '#dc2626' };
+  const AGENT_MODEL_COLORS = { opus: '#7c3aed', sonnet: '#0891b2' };
+
+  // Position nodes horizontally within each layer
+  const positions = {};
+  layers.forEach((layer, li) => {
+    const [w] = NODE_SIZES[li];
+    const gap = li === 2 ? 12 : 20;
+    const totalW = layer.length * w + (layer.length - 1) * gap;
+    const startX = PAD + (li === 0 ? (Math.max(layers[1].length, layers[2].length) * (NODE_SIZES[1][0] + 20) - totalW) / 2 : 0);
+    layer.forEach((n, i) => {
+      positions[n.id] = { x: startX + i * (w + gap) + w / 2, y: LAYER_Y[li], w, h: NODE_SIZES[li][1] };
+    });
+  });
+
+  // Calculate SVG dimensions
+  let maxX = PAD;
+  Object.values(positions).forEach(p => { if (p.x + p.w / 2 + PAD > maxX) maxX = p.x + p.w / 2 + PAD; });
+  const svgW = Math.max(maxX, 800);
+  const svgH = LAYER_Y[2] + 60;
+
+  // Build edge connection map for hover
+  const connMap = {}; // nodeId -> Set of connected nodeIds
+  edges.forEach(e => {
+    if (!connMap[e.source]) connMap[e.source] = new Set();
+    if (!connMap[e.target]) connMap[e.target] = new Set();
+    connMap[e.source].add(e.target);
+    connMap[e.target].add(e.source);
+  });
+
+  // Get node border color
+  function nodeColor(n) {
+    if (n._layer === 0) return NODE_COLORS[0];
+    if (n._layer === 1) {
+      const tags = (n.tags || []).join(' ');
+      if (tags.includes('opus')) return AGENT_MODEL_COLORS.opus;
+      return AGENT_MODEL_COLORS.sonnet;
+    }
+    return '#059669';
+  }
+
+  // Edge style
+  function edgeStyle(type) {
+    if (type === 'service-call') {
+      // Check if it's agent delegation or tool usage by looking at semantic
+      return { dash: '', width: 1.5, color: 'var(--text-muted)' };
+    }
+    return { dash: '4 3', width: 1, color: 'var(--text-muted)' };
+  }
+
+  // Build SVG
+  let svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + svgW + ' ' + svgH + '">';
+
+  // Arrowhead marker
+  svg += '<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">';
+  svg += '<path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-muted)" /></marker></defs>';
+
+  // Layer labels
+  LAYER_LABELS.forEach((label, i) => {
+    svg += '<text x="12" y="' + (LAYER_Y[i] + 4) + '" class="layer-label">' + label + '</text>';
+  });
+
+  // Edges
+  edges.forEach(e => {
+    const src = positions[e.source], tgt = positions[e.target];
+    if (!src || !tgt) return;
+    const connType = e.type || 'service-call';
+    const isFeedback = connType === 'service-call' && src.y > tgt.y;
+    const style = isFeedback ? { dash: '6 3', width: 1.5, color: 'var(--text-muted)' } : edgeStyle(connType);
+    const isToolConn = tgt.y > src.y && nodeMap[e.target] && nodeMap[e.target].type === 'service';
+    if (isToolConn) { style.dash = '2 2'; style.width = 1; }
+
+    // Quadratic bezier
+    const midY = (src.y + tgt.y) / 2;
+    const d = 'M ' + src.x + ' ' + (src.y + src.h / 2) + ' Q ' + src.x + ' ' + midY + ' ' + tgt.x + ' ' + (tgt.y - tgt.h / 2);
+    svg += '<path class="edge-path" data-src="' + e.source + '" data-tgt="' + e.target + '" d="' + d + '" ';
+    svg += 'stroke="' + style.color + '" stroke-width="' + style.width + '"';
+    if (style.dash) svg += ' stroke-dasharray="' + style.dash + '"';
+    svg += ' marker-end="url(#arrow)" />';
+  });
+
+  // Nodes
+  nodes.forEach(n => {
+    const p = positions[n.id];
+    if (!p) return;
+    const color = nodeColor(n);
+    svg += '<g class="node-group" data-id="' + n.id + '">';
+    svg += '<rect class="node-rect" x="' + (p.x - p.w / 2) + '" y="' + (p.y - p.h / 2) + '" width="' + p.w + '" height="' + p.h + '" stroke="' + color + '" />';
+    // Truncate long names
+    const label = n.name.length > 16 ? n.name.slice(0, 15) + '...' : n.name;
+    svg += '<text class="node-text" x="' + p.x + '" y="' + p.y + '">' + escapeHtml(label) + '</text>';
+    svg += '</g>';
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+
+  // Hover interactivity
+  container.querySelectorAll('.node-group').forEach(g => {
+    g.addEventListener('mouseenter', () => {
+      const id = g.dataset.id;
+      const connected = connMap[id] || new Set();
+      container.querySelectorAll('.node-group').forEach(ng => {
+        ng.querySelector('.node-rect').classList.toggle('dimmed', ng.dataset.id !== id && !connected.has(ng.dataset.id));
+      });
+      container.querySelectorAll('.edge-path').forEach(ep => {
+        ep.classList.toggle('dimmed', ep.dataset.src !== id && ep.dataset.tgt !== id);
+      });
+    });
+    g.addEventListener('mouseleave', () => {
+      container.querySelectorAll('.dimmed').forEach(el => el.classList.remove('dimmed'));
+    });
+  });
+}
 </script>
 </body>
 </html>"""
@@ -516,6 +760,10 @@ class StratagemHandler(BaseHTTPRequestHandler):
             self._serve_html()
         elif parsed.path == "/api/research":
             self._handle_research(parsed)
+        elif parsed.path == "/api/graph":
+            self._handle_graph()
+        elif parsed.path == "/api/threads":
+            self._handle_threads()
         elif parsed.path == "/api/health":
             self._json_response({"status": "ok", "version": "0.1.0"})
         else:
@@ -533,6 +781,42 @@ class StratagemHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(data).encode("utf-8"))
 
+    def _handle_graph(self):
+        """Return architecture graph data."""
+        cwd = Path.cwd()
+        graph_path = cwd / ".claude" / "architecture" / "graph.json"
+
+        if not graph_path.exists():
+            # Generate if missing
+            try:
+                from stratagem.navgator import generate_architecture
+                generate_architecture(cwd)
+            except Exception:
+                pass
+
+        if graph_path.exists():
+            data = json.loads(graph_path.read_text(encoding="utf-8"))
+            # Enrich nodes with tag info from components
+            comp_dir = cwd / ".claude" / "architecture" / "components"
+            if comp_dir.exists():
+                for node in data.get("nodes", []):
+                    comp_file = comp_dir / f"{node['id']}.json"
+                    if comp_file.exists():
+                        try:
+                            comp = json.loads(comp_file.read_text(encoding="utf-8"))
+                            node["tags"] = comp.get("tags", [])
+                        except Exception:
+                            pass
+            self._json_response(data)
+        else:
+            self._json_response({"nodes": [], "edges": []})
+
+    def _handle_threads(self):
+        """Return thread list."""
+        from stratagem.threads import list_threads
+        threads = list_threads(Path.cwd())
+        self._json_response(threads)
+
     def _handle_research(self, parsed):
         """Stream research results as Server-Sent Events."""
         params = parse_qs(parsed.query)
@@ -543,6 +827,7 @@ class StratagemHandler(BaseHTTPRequestHandler):
             return
 
         model = params.get("model", [None])[0]
+        thread_id = params.get("thread_id", [None])[0]
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -561,7 +846,7 @@ class StratagemHandler(BaseHTTPRequestHandler):
 
         try:
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(self._stream_research(prompt, model, send_event))
+            loop.run_until_complete(self._stream_research(prompt, model, thread_id, send_event))
             loop.close()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -573,14 +858,19 @@ class StratagemHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-    async def _stream_research(self, prompt: str, model: str | None, send_event):
+    async def _stream_research(self, prompt: str, model: str | None, thread_id: str | None, send_event):
         """Run research and stream events with agent tracking."""
         from stratagem.agent import run_research, AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 
         cwd = Path.cwd()
         stratagem_dir = cwd / ".stratagem"
-        for subdir in ["cache", "filings", "extractions", "reports"]:
+        for subdir in ["cache", "filings", "extractions", "reports", "threads", "artifacts"]:
             (stratagem_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+        # Create thread if specified
+        if thread_id:
+            from stratagem.threads import create_thread
+            create_thread(thread_id, cwd)
 
         active_agents = set()
 
@@ -588,6 +878,7 @@ class StratagemHandler(BaseHTTPRequestHandler):
             prompt=prompt,
             cwd=cwd,
             model=model,
+            thread_id=thread_id,
         ):
             if isinstance(message, AssistantMessage):
                 for block in message.content:

@@ -65,6 +65,15 @@ async def create_report(args: dict[str, Any]) -> dict[str, Any]:
         return _error(f"Unsupported format: {fmt}")
 
 
+def _register_artifact(output_path: str, fmt: str, title: str) -> None:
+    """Best-effort artifact registration."""
+    try:
+        from stratagem.artifacts import register
+        register(path=output_path, format=fmt, title=title, cwd=Path.cwd())
+    except Exception:
+        pass
+
+
 def _create_markdown_report(title: str, sections: list[dict], output_path: str, metadata: dict) -> dict[str, Any]:
     lines: list[str] = []
 
@@ -102,6 +111,7 @@ def _create_markdown_report(title: str, sections: list[dict], output_path: str, 
 
     text = "\n".join(lines)
     Path(output_path).write_text(text, encoding="utf-8")
+    _register_artifact(output_path, "markdown", title)
 
     return {"content": [{"type": "text", "text": f"Report saved: {output_path} ({len(text):,} chars, {len(sections)} sections)"}]}
 
@@ -166,6 +176,7 @@ def _create_pptx_report(title: str, sections: list[dict], output_path: str, meta
             pass  # Layout has no content placeholder
 
     prs.save(output_path)
+    _register_artifact(output_path, "pptx", title)
     return {"content": [{"type": "text", "text": f"PPTX report saved: {output_path} ({len(sections) + 1} slides)"}]}
 
 
@@ -229,6 +240,7 @@ def _create_docx_report(title: str, sections: list[dict], output_path: str, meta
         run.font.italic = True
 
     doc.save(output_path)
+    _register_artifact(output_path, "docx", title)
     return {"content": [{"type": "text", "text": f"DOCX report saved: {output_path} ({len(sections)} sections)"}]}
 
 
@@ -283,6 +295,7 @@ def _create_html_report(title: str, sections: list[dict], output_path: str, meta
 
     html_text = "\n".join(html_parts)
     Path(output_path).write_text(html_text, encoding="utf-8")
+    _register_artifact(output_path, "html", title)
 
     return {"content": [{"type": "text", "text": f"HTML report saved: {output_path} ({len(html_text):,} chars)"}]}
 

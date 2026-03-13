@@ -1,6 +1,5 @@
 """Integration tests for Stratagem agent."""
 
-import pytest
 from pathlib import Path
 
 from stratagem.server import create_stratagem_server, get_all_allowed_tools, ALL_TOOLS, TOOL_NAMES
@@ -9,7 +8,7 @@ from stratagem.subagents.definitions import SUBAGENTS
 
 class TestServer:
     def test_all_tools_registered(self):
-        assert len(ALL_TOOLS) == 9
+        assert len(ALL_TOOLS) == 10
 
     def test_tool_names(self):
         for name in TOOL_NAMES:
@@ -96,18 +95,18 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 12 agents + 9 tools = 21 components
-        assert index["stats"]["total_components"] == 21
+        # 12 agents + 10 tools = 22 components
+        assert index["stats"]["total_components"] == 22
         assert index["stats"]["components_by_type"]["agent"] == 12
-        assert index["stats"]["components_by_type"]["service"] == 9
+        assert index["stats"]["components_by_type"]["service"] == 10
 
     def test_connection_count(self, tmp_path):
         import json
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 11 delegations + 3 feedback + 13 tool uses + 1 control→create_report = 28
-        assert index["stats"]["total_connections"] == 29
+        # 11 delegations + 3 feedback + 16 tool uses + 1 control→create_report = 31
+        assert index["stats"]["total_connections"] == 31
 
     def test_graph_nodes_match_components(self, tmp_path):
         import json
@@ -123,5 +122,5 @@ class TestNavGator:
         arch_dir = generate_architecture(tmp_path)
         comp_files = list((arch_dir / "components").glob("COMP_*.json"))
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
-        assert len(comp_files) == 21
-        assert len(conn_files) == 29
+        assert len(comp_files) == 22
+        assert len(conn_files) == 31

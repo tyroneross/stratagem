@@ -9,6 +9,7 @@ from stratagem.tools.presentation import read_pptx, create_pptx
 from stratagem.tools.images import extract_images
 from stratagem.tools.sec_edgar import search_sec_filings, download_sec_filing
 from stratagem.tools.reports import create_report
+from stratagem.tools.spreadsheet_create import create_spreadsheet
 
 # All custom tools
 ALL_TOOLS = [
@@ -21,6 +22,7 @@ ALL_TOOLS = [
     search_sec_filings,
     download_sec_filing,
     create_report,
+    create_spreadsheet,
 ]
 
 # Tool names for allowed_tools configuration

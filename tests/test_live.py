@@ -1,27 +1,17 @@
 """Live integration tests — validate tools against real inputs.
 
 These tests create real files and (optionally) make real network requests.
-Mark network tests with @pytest.mark.network so they can be skipped offline.
+Mark network tests with @mark("network") so they can be skipped offline.
 """
 
-import pytest
 from pathlib import Path
-import tempfile
-import shutil
-
-
-@pytest.fixture
-def tmp_dir():
-    """Provide a temporary directory, cleaned up after each test."""
-    d = Path(tempfile.mkdtemp(prefix="stratagem_test_"))
-    yield d
-    shutil.rmtree(d, ignore_errors=True)
+from stratagem.testing import mark
 
 
 # ── scrape_url ──────────────────────────────────────────────
 
 class TestScrapeUrlLive:
-    @pytest.mark.network
+    @mark("network")
     async def test_scrape_real_url(self):
         from stratagem.tools.web import scrape_url
 
@@ -197,7 +187,7 @@ class TestExtractImagesLive:
 # ── SEC EDGAR ─────────────────────────────────────────────
 
 class TestSecEdgarLive:
-    @pytest.mark.network
+    @mark("network")
     async def test_search_aapl_filings(self):
         from stratagem.tools.sec_edgar import search_sec_filings
 
@@ -212,7 +202,7 @@ class TestSecEdgarLive:
         assert "10-K" in text
 
     async def test_empty_filings_no_crash(self):
-        """Verify NameError fix — querying a bogus ticker shouldn't crash."""
+        """Verify querying a bogus ticker returns error, not crash."""
         from stratagem.tools.sec_edgar import download_sec_filing
 
         result = await download_sec_filing.handler({
@@ -220,5 +210,5 @@ class TestSecEdgarLive:
             "form_type": "10-K",
             "filing_index": 0,
         })
-        # Should return an error, not crash with NameError
+        # Should return an error, not crash
         assert result.get("isError") is True or "Error" in result["content"][0]["text"] or "not found" in result["content"][0]["text"].lower() or "Failed" in result["content"][0]["text"]
