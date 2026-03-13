@@ -221,33 +221,34 @@ async def run_research(
     turn_count = 0
     cost_usd = None
 
-    async for message in query(prompt=prompt, options=options):
-        # Collect data for thread entry
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    result_text += block.text
-        elif isinstance(message, ResultMessage):
-            turn_count = message.num_turns
-            cost_usd = message.total_cost_usd
+    try:
+        async for message in query(prompt=prompt, options=options):
+            # Collect data for thread entry
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        result_text += block.text
+            elif isinstance(message, ResultMessage):
+                turn_count = message.num_turns
+                cost_usd = message.total_cost_usd
 
-        if verbose:
-            _print_message(message)
-        yield message
-
-    # Persist thread entry after completion
-    if thread_id:
-        from stratagem.threads import append_entry
-        # Use last 500 chars as summary (the agent's final output)
-        summary = result_text[-500:] if len(result_text) > 500 else result_text
-        append_entry(
-            thread_id,
-            cwd=effective_cwd,
-            query=prompt,
-            summary=summary,
-            turns=turn_count,
-            cost=cost_usd,
-        )
+            if verbose:
+                _print_message(message)
+            yield message
+    finally:
+        # Persist thread entry even if generator abandoned early
+        if thread_id and (result_text or turn_count > 0):
+            from stratagem.threads import append_entry
+            # Use last 500 chars as summary (the agent's final output)
+            summary = result_text[-500:] if len(result_text) > 500 else result_text
+            append_entry(
+                thread_id,
+                cwd=effective_cwd,
+                query=prompt,
+                summary=summary,
+                turns=turn_count,
+                cost=cost_usd,
+            )
 
 
 _AGENT_MODELS = {

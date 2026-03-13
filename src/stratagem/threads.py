@@ -11,8 +11,10 @@ Storage: .stratagem/threads/
     context.md                  # Rolling summary, max 30 lines
 """
 
+import fcntl
 import json
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -25,8 +27,29 @@ def _index_path(cwd: Path) -> Path:
     return _threads_dir(cwd) / "index.json"
 
 
+def _validate_thread_id(thread_id: str) -> None:
+    """Reject path traversal attempts in thread IDs."""
+    if "/" in thread_id or "\\" in thread_id or ".." in thread_id:
+        raise ValueError(f"Invalid thread_id: {thread_id}")
+
+
 def _thread_dir(thread_id: str, cwd: Path) -> Path:
+    _validate_thread_id(thread_id)
     return _threads_dir(cwd) / thread_id
+
+
+@contextmanager
+def _lock_index(cwd: Path):
+    """Acquire an exclusive file lock on the index for atomic read-modify-write."""
+    lock_path = _threads_dir(cwd) / ".index.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(lock_path, "w")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(f, fcntl.LOCK_UN)
+        f.close()
 
 
 def _read_index(cwd: Path) -> list[dict]:
@@ -56,19 +79,19 @@ def create_thread(thread_id: str, cwd: Path, title: str | None = None) -> Path:
     tdir = _thread_dir(thread_id, cwd)
     tdir.mkdir(parents=True, exist_ok=True)
 
-    # Register in index
-    index = _read_index(cwd)
-    # Don't duplicate if already exists
-    existing_ids = {e["id"] for e in index}
-    if thread_id not in existing_ids:
-        index.append({
-            "id": thread_id,
-            "title": title or thread_id,
-            "created": datetime.now().isoformat(),
-            "last_active": datetime.now().isoformat(),
-            "query_count": 0,
-        })
-        _write_index(cwd, index)
+    # Register in index (locked for concurrent safety)
+    with _lock_index(cwd):
+        index = _read_index(cwd)
+        existing_ids = {e["id"] for e in index}
+        if thread_id not in existing_ids:
+            index.append({
+                "id": thread_id,
+                "title": title or thread_id,
+                "created": datetime.now().isoformat(),
+                "last_active": datetime.now().isoformat(),
+                "query_count": 0,
+            })
+            _write_index(cwd, index)
 
     return tdir
 
@@ -108,23 +131,24 @@ def append_entry(
     with open(messages_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
 
-    # Update index
-    index = _read_index(cwd)
-    for e in index:
-        if e["id"] == thread_id:
-            e["last_active"] = datetime.now().isoformat()
-            e["query_count"] = e.get("query_count", 0) + 1
-            break
-    else:
-        # Thread wasn't in index — add it
-        index.append({
-            "id": thread_id,
-            "title": query[:60],
-            "created": datetime.now().isoformat(),
-            "last_active": datetime.now().isoformat(),
-            "query_count": 1,
-        })
-    _write_index(cwd, index)
+    # Update index (locked for concurrent safety)
+    with _lock_index(cwd):
+        index = _read_index(cwd)
+        for e in index:
+            if e["id"] == thread_id:
+                e["last_active"] = datetime.now().isoformat()
+                e["query_count"] = e.get("query_count", 0) + 1
+                break
+        else:
+            # Thread wasn't in index — add it
+            index.append({
+                "id": thread_id,
+                "title": query[:60],
+                "created": datetime.now().isoformat(),
+                "last_active": datetime.now().isoformat(),
+                "query_count": 1,
+            })
+        _write_index(cwd, index)
 
     # Rebuild context after appending
     rebuild_context(thread_id, cwd)

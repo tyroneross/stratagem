@@ -7,9 +7,11 @@ Storage: .stratagem/artifacts/
   manifest.json    # [{id, path, format, title, thread_id, created, size_bytes}]
 """
 
+import fcntl
 import hashlib
 import json
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +23,20 @@ def _artifacts_dir(cwd: Path) -> Path:
 def get_manifest_path(cwd: Path) -> Path:
     """Return the path to manifest.json."""
     return _artifacts_dir(cwd) / "manifest.json"
+
+
+@contextmanager
+def _lock_manifest(cwd: Path):
+    """Acquire an exclusive file lock for atomic read-modify-write."""
+    lock_path = _artifacts_dir(cwd) / ".manifest.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(lock_path, "w")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(f, fcntl.LOCK_UN)
+        f.close()
 
 
 def _read_manifest(cwd: Path) -> list[dict]:
@@ -69,7 +85,10 @@ def register(
         The created manifest entry.
     """
     artifact_path = Path(path)
-    size_bytes = artifact_path.stat().st_size if artifact_path.exists() else 0
+    try:
+        size_bytes = artifact_path.stat().st_size if artifact_path.exists() else 0
+    except OSError:
+        size_bytes = 0
 
     entry = {
         "id": _make_artifact_id(),
@@ -81,9 +100,10 @@ def register(
         "size_bytes": size_bytes,
     }
 
-    manifest = _read_manifest(cwd)
-    manifest.append(entry)
-    _write_manifest(cwd, manifest)
+    with _lock_manifest(cwd):
+        manifest = _read_manifest(cwd)
+        manifest.append(entry)
+        _write_manifest(cwd, manifest)
 
     return entry
 

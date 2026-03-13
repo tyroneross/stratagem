@@ -556,6 +556,10 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function escapeAttr(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 document.getElementById('prompt').addEventListener('keydown', function(e) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
 });
@@ -672,7 +676,7 @@ function renderGraph(data, container) {
     // Quadratic bezier
     const midY = (src.y + tgt.y) / 2;
     const d = 'M ' + src.x + ' ' + (src.y + src.h / 2) + ' Q ' + src.x + ' ' + midY + ' ' + tgt.x + ' ' + (tgt.y - tgt.h / 2);
-    svg += '<path class="edge-path" data-src="' + e.source + '" data-tgt="' + e.target + '" d="' + d + '" ';
+    svg += '<path class="edge-path" data-src="' + escapeAttr(e.source) + '" data-tgt="' + escapeAttr(e.target) + '" d="' + d + '" ';
     svg += 'stroke="' + style.color + '" stroke-width="' + style.width + '"';
     if (style.dash) svg += ' stroke-dasharray="' + style.dash + '"';
     svg += ' marker-end="url(#arrow)" />';
@@ -683,7 +687,7 @@ function renderGraph(data, container) {
     const p = positions[n.id];
     if (!p) return;
     const color = nodeColor(n);
-    svg += '<g class="node-group" data-id="' + n.id + '">';
+    svg += '<g class="node-group" data-id="' + escapeAttr(n.id) + '">';
     svg += '<rect class="node-rect" x="' + (p.x - p.w / 2) + '" y="' + (p.y - p.h / 2) + '" width="' + p.w + '" height="' + p.h + '" stroke="' + color + '" />';
     // Truncate long names
     const label = n.name.length > 16 ? n.name.slice(0, 15) + '...' : n.name;
