@@ -7,7 +7,7 @@
     "skills/research",
     "skills/analyze-earnings",
     "skills/extract-data",
-    "skills/financial-model"
+    "skills/flowchart"
   ],
   "agents": ["agents/research-orchestrator"]
 }

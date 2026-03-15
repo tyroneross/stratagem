@@ -9,7 +9,15 @@ build/
 .venv/
 venv/
 .env
-.stratagem/
+# Runtime data folder (not src/stratagem/ package)
+/stratagem/cache/
+/stratagem/filings/
+/stratagem/extractions/
+/stratagem/reports/
+/stratagem/threads/
+/stratagem/artifacts/
+/stratagem/scripts/
+/stratagem/progress.md
 .claude/architecture/
 output/
 *.pyc

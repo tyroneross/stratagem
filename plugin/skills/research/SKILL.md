@@ -44,10 +44,10 @@ Use the **research-synthesizer** subagent to combine findings into a coherent na
 ## Step 5: Generate Report
 
 Use `create_report` to produce the final output:
-- Default: markdown report saved to `.stratagem/reports/`
+- Default: markdown report saved to `stratagem/reports/`
 - Option: PPTX for presentations
 - Option: HTML for web-ready output
 
 ## Output
 
-Save the final report to `.stratagem/reports/` and present a summary to the user with key findings.
+Save the final report to `stratagem/reports/` and present a summary to the user with key findings.

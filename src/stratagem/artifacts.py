@@ -1,9 +1,9 @@
 """Artifact manifest management — centralize all output with tracking.
 
 All reports, spreadsheets, presentations, and other outputs are registered
-in .stratagem/artifacts/manifest.json for discovery and thread association.
+in stratagem/artifacts/manifest.json for discovery and thread association.
 
-Storage: .stratagem/artifacts/
+Storage: stratagem/artifacts/
   manifest.json    # [{id, path, format, title, thread_id, created, size_bytes}]
 """
 

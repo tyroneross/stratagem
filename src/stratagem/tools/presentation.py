@@ -213,7 +213,14 @@ async def create_pptx(args: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         return _error(f"Failed to save presentation: {e}")
 
-    return {"content": [{"type": "text", "text": f"Created presentation: {output_path} ({len(slides_data)} slides)"}]}
+    saved = Path(output_path).resolve()
+    if not saved.exists():
+        return _error(f"Save completed but file not found at: {saved}")
+    size = saved.stat().st_size
+    if size == 0:
+        return _error(f"File created but is empty: {saved}")
+
+    return {"content": [{"type": "text", "text": f"Created presentation: {saved} ({len(slides_data)} slides, {size:,} bytes)"}]}
 
 
 def _parse_table_content(content: str) -> list[list[str]]:

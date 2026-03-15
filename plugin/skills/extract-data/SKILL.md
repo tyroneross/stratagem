@@ -47,4 +47,4 @@ Present extracted data in the most useful format:
 - Key-value pairs for metadata
 - Formatted text for narrative content
 
-Save extractions to `.stratagem/extractions/` for later use.
+Save extractions to `stratagem/extractions/` for later use.

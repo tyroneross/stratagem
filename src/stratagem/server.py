@@ -44,3 +44,20 @@ def create_stratagem_server():
 def get_all_allowed_tools() -> list[str]:
     """Get full list of tool names to pre-approve."""
     return TOOL_NAMES + BUILTIN_TOOLS
+
+
+if __name__ == "__main__":
+    import asyncio
+    from mcp.server.stdio import stdio_server
+
+    server_config = create_stratagem_server()
+    mcp_server = server_config["instance"]
+
+    async def _main():
+        async with stdio_server() as (read_stream, write_stream):
+            await mcp_server.run(
+                read_stream, write_stream,
+                mcp_server.create_initialization_options(),
+            )
+
+    asyncio.run(_main())

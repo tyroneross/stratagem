@@ -75,7 +75,7 @@ async def search_sec_filings(args: dict[str, Any]) -> dict[str, Any]:
             "ticker": {"type": "string", "description": "Company ticker symbol"},
             "form_type": {"type": "string", "description": "SEC form type", "default": "10-K"},
             "filing_index": {"type": "integer", "description": "Index from search_sec_filings results", "default": 0},
-            "output_dir": {"type": "string", "description": "Directory to save filing", "default": ".stratagem/filings"},
+            "output_dir": {"type": "string", "description": "Directory to save filing", "default": "stratagem/filings"},
         },
         "required": ["ticker"],
     },
@@ -84,7 +84,7 @@ async def download_sec_filing(args: dict[str, Any]) -> dict[str, Any]:
     ticker = args["ticker"].upper()
     form_type = args.get("form_type", "10-K")
     filing_index = args.get("filing_index", 0)
-    output_dir = args.get("output_dir", ".stratagem/filings")
+    output_dir = args.get("output_dir", "stratagem/filings")
 
     try:
         company = await resolve_ticker(ticker)

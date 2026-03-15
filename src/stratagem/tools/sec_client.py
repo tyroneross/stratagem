@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup
 
-CACHE_DIR = Path(".stratagem/cache")
+CACHE_DIR = Path("stratagem/cache")
 TICKERS_CACHE = CACHE_DIR / "company_tickers.json"
 CACHE_MAX_AGE = 86400  # 1 day
 

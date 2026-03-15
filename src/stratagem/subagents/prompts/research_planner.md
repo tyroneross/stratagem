@@ -115,7 +115,7 @@ After intent is clear:
 
 ### Output
 - Format: [markdown / docx / both]
-- Location: `.stratagem/reports/`
+- Location: `stratagem/reports/`
 
 </output_format>
 

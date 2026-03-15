@@ -49,4 +49,4 @@ Generate a financial analysis report with:
 - Risks and concerns
 - Source citations
 
-Save to `.stratagem/reports/` and present key findings to the user.
+Save to `stratagem/reports/` and present key findings to the user.

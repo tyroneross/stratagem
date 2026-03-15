@@ -29,7 +29,16 @@ class AppState: ObservableObject {
     @Published var isConfigured: Bool
 
     init() {
-        self.isConfigured = UserDefaults.standard.string(forKey: "pythonPath") != nil
+        // Validate stored python path is an actual file — handles migration
+        // from old config ("uv run python") and broken venvs
+        if let path = UserDefaults.standard.string(forKey: "pythonPath"),
+            FileManager.default.fileExists(atPath: path)
+        {
+            self.isConfigured = true
+        } else {
+            UserDefaults.standard.removeObject(forKey: "pythonPath")
+            self.isConfigured = false
+        }
     }
 
     func markConfigured() {

@@ -113,7 +113,14 @@ def _create_markdown_report(title: str, sections: list[dict], output_path: str, 
     Path(output_path).write_text(text, encoding="utf-8")
     _register_artifact(output_path, "markdown", title)
 
-    return {"content": [{"type": "text", "text": f"Report saved: {output_path} ({len(text):,} chars, {len(sections)} sections)"}]}
+    saved = Path(output_path).resolve()
+    if not saved.exists():
+        return _error(f"Save completed but file not found at: {saved}")
+    size = saved.stat().st_size
+    if size == 0:
+        return _error(f"File created but is empty: {saved}")
+
+    return {"content": [{"type": "text", "text": f"Report saved: {saved} ({size:,} bytes, {len(sections)} sections)"}]}
 
 
 def _create_pptx_report(title: str, sections: list[dict], output_path: str, metadata: dict) -> dict[str, Any]:
@@ -177,7 +184,15 @@ def _create_pptx_report(title: str, sections: list[dict], output_path: str, meta
 
     prs.save(output_path)
     _register_artifact(output_path, "pptx", title)
-    return {"content": [{"type": "text", "text": f"PPTX report saved: {output_path} ({len(sections) + 1} slides)"}]}
+
+    saved = Path(output_path).resolve()
+    if not saved.exists():
+        return _error(f"Save completed but file not found at: {saved}")
+    size = saved.stat().st_size
+    if size == 0:
+        return _error(f"File created but is empty: {saved}")
+
+    return {"content": [{"type": "text", "text": f"PPTX report saved: {saved} ({len(sections) + 1} slides, {size:,} bytes)"}]}
 
 
 def _create_docx_report(title: str, sections: list[dict], output_path: str, metadata: dict) -> dict[str, Any]:
@@ -241,7 +256,15 @@ def _create_docx_report(title: str, sections: list[dict], output_path: str, meta
 
     doc.save(output_path)
     _register_artifact(output_path, "docx", title)
-    return {"content": [{"type": "text", "text": f"DOCX report saved: {output_path} ({len(sections)} sections)"}]}
+
+    saved = Path(output_path).resolve()
+    if not saved.exists():
+        return _error(f"Save completed but file not found at: {saved}")
+    size = saved.stat().st_size
+    if size == 0:
+        return _error(f"File created but is empty: {saved}")
+
+    return {"content": [{"type": "text", "text": f"DOCX report saved: {saved} ({len(sections)} sections, {size:,} bytes)"}]}
 
 
 def _create_html_report(title: str, sections: list[dict], output_path: str, metadata: dict) -> dict[str, Any]:
@@ -297,7 +320,14 @@ def _create_html_report(title: str, sections: list[dict], output_path: str, meta
     Path(output_path).write_text(html_text, encoding="utf-8")
     _register_artifact(output_path, "html", title)
 
-    return {"content": [{"type": "text", "text": f"HTML report saved: {output_path} ({len(html_text):,} chars)"}]}
+    saved = Path(output_path).resolve()
+    if not saved.exists():
+        return _error(f"Save completed but file not found at: {saved}")
+    size = saved.stat().st_size
+    if size == 0:
+        return _error(f"File created but is empty: {saved}")
+
+    return {"content": [{"type": "text", "text": f"HTML report saved: {saved} ({size:,} bytes)"}]}
 
 
 def _html_escape(text: str) -> str:

@@ -72,7 +72,7 @@ class TestPluginStructure:
 
     def test_skill_files_exist(self):
         skills_dir = Path(__file__).parent.parent / "plugin" / "skills"
-        for skill in ["research", "analyze-earnings", "extract-data", "financial-model"]:
+        for skill in ["research", "analyze-earnings", "extract-data", "flowchart"]:
             skill_file = skills_dir / skill / "SKILL.md"
             assert skill_file.exists(), f"Missing skill: {skill_file}"
 

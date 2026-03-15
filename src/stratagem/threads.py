@@ -4,7 +4,7 @@ Adapts Bookmark's pattern for research threads. Each thread maintains:
 - messages.jsonl: Append-only log of queries and result summaries
 - context.md: Rolling summary rebuilt from messages, injected into system prompt
 
-Storage: .stratagem/threads/
+Storage: stratagem/threads/
   index.json                    # [{id, title, created, last_active, query_count}]
   <thread_id>/
     messages.jsonl              # {ts, role, query, result_summary, artifacts, turns, cost_usd}
@@ -113,6 +113,9 @@ def append_entry(
     artifacts: list[str] | None = None,
     turns: int = 0,
     cost: float | None = None,
+    rationale: str | None = None,
+    tools_used: list[str] | None = None,
+    scripts: list[str] | None = None,
 ) -> None:
     """Append a query/result entry to the thread's messages.jsonl and rebuild context."""
     tdir = _thread_dir(thread_id, cwd)
@@ -123,6 +126,9 @@ def append_entry(
         "query": query,
         "result_summary": summary,
         "artifacts": artifacts or [],
+        "rationale": rationale,
+        "tools_used": tools_used or [],
+        "scripts": scripts or [],
         "turns": turns,
         "cost_usd": cost,
     }
@@ -211,6 +217,11 @@ def rebuild_context(thread_id: str, cwd: Path) -> None:
 
         if artifacts:
             lines.append(f"Artifacts: {', '.join(artifacts[:5])}")
+
+        if entry.get("rationale"):
+            lines.append(f"*Approach*: {entry['rationale'][:200]}")
+        if entry.get("scripts"):
+            lines.append(f"*Scripts*: {', '.join(entry['scripts'][:3])}")
 
         lines.append("")  # blank separator
 

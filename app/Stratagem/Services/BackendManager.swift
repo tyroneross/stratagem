@@ -68,10 +68,12 @@ class BackendManager: ObservableObject {
 
         self.port = testPort
 
-        // Launch the backend process
+        // Launch the backend process using the managed venv python
+        let pythonPath = UserDefaults.standard.string(forKey: "pythonPath") ?? "/usr/bin/python3"
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["uv", "run", "python", "-m", "stratagem", "--ui", "--port", "\(testPort)"]
+        process.executableURL = URL(fileURLWithPath: pythonPath)
+        process.arguments = ["-m", "stratagem", "--ui", "--port", "\(testPort)"]
         process.currentDirectoryURL = URL(fileURLWithPath: projectDir)
 
         // Capture stderr for error reporting

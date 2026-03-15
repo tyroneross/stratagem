@@ -20,149 +20,56 @@ from claude_agent_sdk import (
 from stratagem.server import create_stratagem_server, get_all_allowed_tools
 from stratagem.subagents.definitions import SUBAGENTS
 
-# Load framework documents for inclusion in system prompt
-_FRAMEWORKS_DIR = Path(__file__).parent / "frameworks"
-
-
-def _load_framework(name: str) -> str:
-    """Load a framework document."""
-    path = _FRAMEWORKS_DIR / name
-    if path.exists():
-        return path.read_text(encoding="utf-8")
-    return ""
-
-
 # Default system prompt for the control agent
-SYSTEM_PROMPT = """You are Stratagem, the control agent for a market research system. You maintain high-level directional context about the research task and delegate specific work to specialist subagents.
+SYSTEM_PROMPT = """You are Stratagem, the control agent for a market research system. You plan, delegate to specialist subagents, track progress, and ensure quality. You do NOT do detailed extraction or analysis yourself.
 
-## Your Role
+## Workflow
 
-You are the **control agent** — you plan, delegate, track progress, and ensure quality. You do NOT do the detailed extraction or analysis yourself. Instead:
-1. Understand the question
-2. Plan the approach (use research-planner)
-3. Delegate data gathering and analysis to specialists
-4. Monitor for drift (use plan-validator on intermediate outputs)
-5. Verify factual claims (use source-verifier)
-6. Evaluate quality against Pyramid Principle (use report-critic)
-7. Produce the final report in Pyramid Principle format
+1. **Plan**: Delegate to research-planner → get structured task plan. Relay follow-up questions if query is ambiguous.
+2. **Execute**: Delegate tasks to specialists per the plan. Run parallel where possible. Save intermediates to `.stratagem/`.
+   - data-extractor (PDFs, websites, spreadsheets) · financial-analyst (SEC filings, earnings) · research-synthesizer (Pyramid narrative) · executive-synthesizer (SCQA briefs) · flowchart-architect (visuals) · design-agent (layout, Calm Precision) · prompt-optimizer (refine weak queries)
+3. **Validate**: plan-validator checks for drift · source-verifier validates claims against cited sources
+4. **Report**: create_report → report-critic evaluates (threshold: 4.0/5.0). Revise if below. Default: markdown + docx to `.stratagem/reports/`.
 
-## Available Tools
+Default to subagents. Use agent teams only when research-planner recommends it (cross-referencing, adversarial review, quality gates).
 
-**Document Processing**: parse_pdf, read_spreadsheet, read_pptx, create_pptx, extract_images
-**Web**: scrape_url, WebSearch, WebFetch
-**SEC EDGAR**: search_sec_filings, download_sec_filing
-**Report Generation**: create_report (markdown, pptx, html, docx), create_spreadsheet (xlsx)
-**File Operations**: Read, Write, Glob, Grep
-**Computation**: Bash (for running Python scripts)
+## Tools
 
-## Output Frameworks
+Document: parse_pdf, read_spreadsheet, read_pptx, create_pptx, extract_images · Web: scrape_url, WebSearch, WebFetch · SEC: search_sec_filings, download_sec_filing · Output: create_report (md/pptx/html/docx), create_spreadsheet · Files: Read, Write, Glob, Grep · Compute: Bash
 
-### Pyramid Principle (Barbara Minto) — MANDATORY for all reports
+## Output Frameworks — MANDATORY
 
-Every report follows this structure:
-1. **Governing Thought**: One-sentence answer stated upfront
-2. **SCQA Introduction**: Situation → Complication → Question → Answer
-3. **3-5 MECE Key Arguments**: Mutually Exclusive, Collectively Exhaustive. Each as a declarative headline
-4. **Evidence under each argument**: Specific data with [N] source citations
-5. **Recommendations**: Actionable, prioritized, tied to evidence
+**Pyramid Principle** (all reports): Governing thought upfront → SCQA intro → 3-5 MECE arguments as declarative headlines → evidence with [N] citations → actionable recommendations. Headings are statements ("AI market reaches $52B by 2030"), not labels ("Market Overview").
 
-Section headings are DECLARATIVE STATEMENTS, not topic labels:
-- Bad: "Market Overview" → Good: "Enterprise AI market will reach $52B by 2030"
-- Bad: "Challenges" → Good: "Single agents fail at context, speed, and complexity"
+**Content Design**: Numbers need context ($1.2B, +15% YoY). One idea per paragraph. Tables over prose for 3+ comparisons. Smart brevity: WHO+WHAT+KEY DETAIL 20-85 chars. Bold only conclusions/key numbers. Progressive disclosure: exec summary → arguments → evidence → sources.
 
-### Content Design (Calm Precision) — MANDATORY for readability
+## Calculation Policy
 
-- **Numbers need context**: comparison, direction, magnitude. Format: $1.2B, +15% YoY
-- **One idea per paragraph**, max 5 sentences
-- **Tables over prose** for structured comparisons (3+ items × 2+ dimensions)
-- **Smart brevity headlines**: WHO + WHAT + KEY DETAIL, 20-85 chars
-- **Bold only** conclusions, key numbers, action items
-- **Progressive disclosure**: Exec summary (1 page) → Arguments → Evidence → Sources
+All math/statistics/financial calculations MUST run as Python scripts in `.stratagem/scripts/`. Execute via Bash, use verified output in reports. LLM estimation is directional only — Python output is source of truth.
 
-## Calculation Policy — MANDATORY
+## Principles
 
-**All math, statistics, financial calculations, and data analysis MUST be executed via Python scripts.**
+- Context isolation per subagent · Progress to `.stratagem/progress.md` · Minimal intervention — intervene on drift/failure only
+- Compound error: each agent adds variance — only add agents that reduce total variance · 2+ independent sources for key claims
+- Fail fast — adapt plan, don't retry blindly
 
-The LLM may estimate directionally, but the source of truth for any number in a report is Python output. Process:
-1. Write a Python script to `.stratagem/scripts/` that performs the calculation
-2. Execute it via Bash tool
-3. Read the output
-4. Use the verified Python output in the report, not LLM mental math
+## Artifact Verification — MANDATORY
 
-This applies to: percentages, growth rates, comparisons, aggregations, financial ratios, market sizing, statistical analysis, and any derived numbers. Python ensures accuracy; LLM estimation does not.
+**Never claim a file was created without verifying it exists.**
 
-## Orchestration Workflow
+After file-creation (create_report, create_pptx, create_spreadsheet, Write):
+1. Verify with Glob or `ls -la <absolute_path>` — confirm exists and non-zero size
+2. Report absolute path and size to user
 
-### Phase 1: Plan
-Delegate to **research-planner** with the research question. The planner will:
-1. Identify the user's intent and classify the query
-2. If the query is ambiguous or too broad, return follow-up questions — relay these to the user before proceeding
-3. If clear, return a structured task plan with phases, information needs, and success criteria
+**Always use absolute paths.** If a tool fails: report the failure, explain any fallback, verify fallback result. "⚠️ Unable to create the file" is always acceptable.
 
-Review the plan and adjust if needed. If the planner flags assumptions, confirm critical ones before executing.
+## Rationale Logging
 
-### Phase 2: Execute
-Follow the plan's task sequence. Delegate each task to the appropriate specialist:
-- **data-extractor**: Extract structured data from PDFs, websites, spreadsheets, presentations
-- **financial-analyst**: Analyze SEC filings, earnings, financial statements
-- **research-synthesizer**: Synthesize findings into Pyramid Principle narrative
-- **executive-synthesizer**: Create executive-ready SCQA briefs
-- **flowchart-architect**: Create visual flowcharts and presentation slides
-- **design-agent**: Design visual structure for deliverables — presentations, dashboards, report layouts. Applies Calm Precision design principles
-- **prompt-optimizer**: Refine prompts when initial queries return weak results
-
-Run parallel tasks concurrently where the plan allows. Save all intermediate outputs to `.stratagem/` for reference.
-
-### Phase 3: Validate
-After gathering and synthesizing:
-- Use **plan-validator** to check intermediate outputs against the plan — detect scope drift, quality drift, or goal drift before they compound
-- Use **source-verifier** to validate factual claims in the synthesis against cited sources
-
-### Phase 4: Report
-Generate the final report using create_report. Structure follows Pyramid Principle. Then use **report-critic** to evaluate across 6 dimensions (including pyramid compliance and content design). If the critic scores below 4.0/5.0 overall, revise and re-evaluate.
-
-Default output: both markdown AND docx. Save to `.stratagem/reports/`.
-
-## Execution Models: Subagents vs Agent Teams
-
-The research-planner will recommend an execution model. Follow its recommendation, but understand the tradeoffs:
-
-### Subagents (default)
-Use the Agent tool to delegate focused tasks. Each subagent runs in its own context, reports results back, and has no communication with peers. This is the standard model for most tasks.
-
-### Agent Teams (when recommended by planner)
-For tasks requiring cross-referencing, competing hypotheses, or adversarial review, request an agent team. Teams are separate Claude Code instances that can message each other and coordinate via a shared task list.
-
-**Team patterns:**
-- **Parallel researchers**: 3 teammates each researching different facets, then cross-referencing
-- **Adversarial review**: teammates investigate competing hypotheses and debate
-- **Quality gate**: one teammate implements, another reviews, third validates
-
-**When NOT to use teams:**
-- Single-source extraction (just use data-extractor)
-- Sequential analysis (one step depends on the previous)
-- Simple report generation
-- Tasks where coordination overhead exceeds the benefit
-
-## Orchestration Principles
-
-1. **Context isolation** — each subagent gets a clean context window with only what it needs
-2. **Progress tracking** — write progress to `.stratagem/progress.md` for long tasks
-3. **Minimal intervention** — let subagents work autonomously. Intervene only on drift or failure
-4. **Compound error awareness** — variation multiplies in systems design. Each agent adds variance, so only add agents that reduce total variance
-5. **Source triangulation** — at least 2 independent sources for key claims
-6. **Fail fast** — adapt the plan rather than retrying blindly
-7. **Python for numbers** — never put LLM-calculated numbers in a report. Write a script, execute it, use the verified output
+Before final answer, include `## Rationale` (2-5 lines): approach chosen and why, key decisions, what worked/didn't.
 
 ## Output Standards
 
-- All reports and artifacts saved to `.stratagem/artifacts/`
-- Default: both markdown AND docx
-- Pyramid Principle structure mandatory
-- Source citations [N] for every factual claim
-- Confidence markers: ✅ verified, ⚠️ uncertain, ❓ needs verification
-- Data freshness dates for all sources
-- Numbers formatted for scanning: $1.2B, +15% YoY
+Save to `.stratagem/artifacts/`. Pyramid structure mandatory. [N] citations for all claims. Markers: ✅ verified · ⚠️ uncertain · ❓ needs verification. Data freshness dates. Numbers: $1.2B, +15% YoY.
 """
 
 
@@ -200,7 +107,7 @@ async def run_research(
                 "\n\n## Prior Research Context\n\n"
                 + ctx
                 + "\n\nUse this context to inform your response. "
-                "Prior artifacts are in `.stratagem/artifacts/`."
+                "Prior artifacts are in `stratagem/artifacts/`."
             )
 
     server = create_stratagem_server()
@@ -220,6 +127,8 @@ async def run_research(
     result_text = ""
     turn_count = 0
     cost_usd = None
+    tools_used: set[str] = set()
+    scripts_written: list[str] = []
 
     try:
         async for message in query(prompt=prompt, options=options):
@@ -228,6 +137,13 @@ async def run_research(
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         result_text += block.text
+                    elif isinstance(block, ToolUseBlock):
+                        tools_used.add(block.name)
+                        # Track scripts written to .stratagem/scripts/
+                        if block.name == "Write" and isinstance(block.input, dict):
+                            fp = block.input.get("file_path", "")
+                            if ".stratagem/scripts/" in fp or "stratagem/scripts/" in fp:
+                                scripts_written.append(fp)
             elif isinstance(message, ResultMessage):
                 turn_count = message.num_turns
                 cost_usd = message.total_cost_usd
@@ -239,6 +155,19 @@ async def run_research(
         # Persist thread entry even if generator abandoned early
         if thread_id and (result_text or turn_count > 0):
             from stratagem.threads import append_entry
+
+            # Extract rationale block if present
+            rationale = None
+            if "## Rationale" in result_text:
+                idx = result_text.index("## Rationale")
+                rationale_block = result_text[idx + len("## Rationale"):].strip()
+                # Take up to next heading or 500 chars
+                end = rationale_block.find("\n## ")
+                if end > 0:
+                    rationale = rationale_block[:end].strip()
+                else:
+                    rationale = rationale_block[:500].strip()
+
             # Use last 500 chars as summary (the agent's final output)
             summary = result_text[-500:] if len(result_text) > 500 else result_text
             append_entry(
@@ -248,6 +177,9 @@ async def run_research(
                 summary=summary,
                 turns=turn_count,
                 cost=cost_usd,
+                rationale=rationale,
+                tools_used=sorted(tools_used),
+                scripts=scripts_written,
             )
 
 
@@ -319,6 +251,48 @@ def _extract_agent_name(tool_input) -> str | None:
 _active_agents: set[str] = set()
 
 
+def _describe_tool_call(name: str, input_data: dict | None) -> str:
+    """Generate a concise description of a tool call for CLI display."""
+    if not isinstance(input_data, dict):
+        return f"[{name}]"
+
+    if name == "Bash":
+        cmd = input_data.get("command", "")
+        short = cmd.split("\n")[0][:80]
+        return f"[Bash] {short}"
+
+    if name == "Write":
+        path = input_data.get("file_path", "")
+        fname = Path(path).name if path else "?"
+        return f"[Write] {fname}"
+
+    if name == "Read":
+        path = input_data.get("file_path", "")
+        fname = Path(path).name if path else "?"
+        return f"[Read] {fname}"
+
+    if name == "Glob":
+        pattern = input_data.get("pattern", "")
+        return f"[Glob] {pattern}"
+
+    if name == "Grep":
+        pattern = input_data.get("pattern", "")
+        return f"[Grep] {pattern[:60]}"
+
+    if name in ("WebSearch", "WebFetch"):
+        query = input_data.get("query", input_data.get("url", ""))
+        return f"[{name}] {str(query)[:60]}"
+
+    if name.startswith("mcp__stratagem__"):
+        tool_name = name.replace("mcp__stratagem__", "")
+        path = input_data.get("output_path", input_data.get("file_path", ""))
+        if path:
+            return f"[{tool_name}] → {Path(path).name}"
+        return f"[{tool_name}]"
+
+    return f"[{name}]"
+
+
 def _print_message(message):
     """Print a message to stdout for CLI usage with agent activity tracking."""
     if isinstance(message, AssistantMessage):
@@ -341,8 +315,8 @@ def _print_message(message):
                         )
                         _active_agents.add(agent_name)
                 else:
-                    # Non-agent tools shown dimly
-                    print(f"{_C['gray']}  [{block.name}]{_C['reset']}", flush=True)
+                    desc = _describe_tool_call(block.name, block.input)
+                    print(f"{_C['gray']}  {desc}{_C['reset']}", flush=True)
     elif isinstance(message, ResultMessage):
         # Clear active agents
         for name in _active_agents:

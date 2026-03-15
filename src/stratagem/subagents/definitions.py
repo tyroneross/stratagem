@@ -68,7 +68,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
         model="opus",
     ),
     "flowchart-architect": AgentDefinition(
-        description="Design financial model architectures and create flowchart visualizations as PowerPoint presentations.",
+        description="Design process architectures and create flowchart visualizations as PowerPoint presentations.",
         prompt=_load_prompt("flowchart_architect"),
         tools=[
             f"{_S}create_pptx",
