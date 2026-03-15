@@ -108,6 +108,7 @@ body {
   font-size: 13px;
   font-family: var(--font);
   outline: none;
+  cursor: pointer;
 }
 .btn {
   padding: 10px 20px;
@@ -203,97 +204,93 @@ body {
 .output-area .error { color: var(--error); }
 .output-area .meta { color: var(--text-muted); font-size: 12px; }
 
-/* -- Architecture Graph -- */
-.graph-container {
+/* -- Phase Diagram -- */
+.phase-diagram {
+  display: flex;
+  align-items: flex-start;
+  padding: 20px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
-  overflow: auto;
-  max-height: 300px;
+  overflow-x: auto;
 }
-.graph-container svg { width: 100%; height: auto; }
-.graph-container svg text {
-  font-family: var(--mono);
-  fill: var(--text);
+.phase-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 100px;
 }
-.graph-container svg .layer-label {
+.phase-header {
   font-size: 11px;
-  fill: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding-bottom: 8px;
 }
-.graph-container svg .node-rect {
-  stroke-width: 2;
-  rx: 6;
-  ry: 6;
-  fill: var(--surface);
-  opacity: 0.5;
-  transition: all 0.3s;
+.phase-arrow {
+  display: flex;
+  align-items: center;
+  padding: 24px 6px 0;
+  color: var(--border);
+  font-size: 20px;
+  user-select: none;
 }
-.graph-container svg .node-text {
-  font-size: 11px;
-  text-anchor: middle;
-  dominant-baseline: central;
-  pointer-events: none;
-  opacity: 0.7;
-  transition: opacity 0.3s;
-}
-.graph-container svg .edge-path {
-  fill: none;
-  transition: all 0.3s;
-}
-.graph-container svg .dimmed { opacity: 0.15; }
-.graph-loading {
-  text-align: center;
-  padding: 40px;
+.phase-node {
+  width: 100%;
+  max-width: 130px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
+  text-align: center;
+  cursor: default;
+  transition: all 0.3s ease;
 }
+.phase-node:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+.phase-node .node-label { font-weight: 500; }
+.phase-node .node-model {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+  opacity: 0.5;
+}
+.phase-node.model-opus { border-left: 3px solid #7c3aed; }
+.phase-node.model-sonnet { border-left: 3px solid #0891b2; }
 
 /* -- Live Node States -- */
-.graph-container .node-group.active .node-rect {
-  opacity: 1;
-  stroke-width: 3;
-  filter: drop-shadow(0 0 6px var(--node-color));
-  animation: node-glow 1.5s ease-in-out infinite;
+.phase-node.active {
+  background: var(--accent);
+  border-color: var(--accent-hover);
+  color: white;
+  border-left-color: var(--accent-hover);
+  animation: pulse 1.5s ease-in-out infinite;
 }
-.graph-container .node-group.active .node-text { opacity: 1; }
-.graph-container .node-group.completed .node-rect {
-  opacity: 0.8;
-  stroke: var(--success);
-  fill: color-mix(in srgb, var(--success) 8%, var(--surface));
-  animation: none;
-  filter: none;
+.phase-node.active .node-model { opacity: 0.8; color: inherit; }
+.phase-node.completed {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: #dbeafe;
 }
-.graph-container .node-group.completed .node-text { opacity: 0.7; }
-.graph-container .node-group.flash .node-rect {
-  opacity: 1;
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 8px var(--node-color));
+.phase-node.completed.model-opus,
+.phase-node.completed.model-sonnet { border-left-color: #93c5fd; }
+@media (prefers-color-scheme: dark) {
+  .phase-node.completed {
+    background: #1e3a5f;
+    color: #93c5fd;
+  }
 }
-.graph-container .node-group.flash .node-text { opacity: 1; }
-@keyframes node-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px var(--node-color)); }
-  50% { filter: drop-shadow(0 0 10px var(--node-color)); }
-}
-
-/* -- Live Edge States -- */
-@keyframes edge-flow {
-  to { stroke-dashoffset: -12; }
-}
-.graph-container .edge-path.active {
-  stroke: var(--accent) !important;
-  stroke-width: 2 !important;
-  stroke-dasharray: 8 4 !important;
-  animation: edge-flow 0.8s linear infinite;
-  opacity: 1 !important;
-}
-.graph-container .edge-path.completed {
-  stroke: var(--success) !important;
-  opacity: 0.5 !important;
-  animation: none;
-}
+.phase-node.completed .node-model { opacity: 0.7; }
+.phase-node.dimmed { opacity: 0.25; }
 
 .footer {
   padding: 12px 24px;
@@ -331,8 +328,66 @@ body {
     </div>
   </div>
 
-  <div class="graph-container" id="graphContainer">
-    <div class="graph-loading" id="graphLoading">Loading architecture...</div>
+  <div class="phase-diagram" id="graphContainer">
+    <div class="phase-column">
+      <div class="phase-header">Plan</div>
+      <div class="phase-node model-sonnet" data-name="research-planner">
+        <div class="node-label">Planner</div>
+        <div class="node-model">sonnet</div>
+      </div>
+    </div>
+    <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
+    <div class="phase-column">
+      <div class="phase-header">Execute</div>
+      <div class="phase-node model-sonnet" data-name="data-extractor">
+        <div class="node-label">Extractor</div>
+        <div class="node-model">sonnet</div>
+      </div>
+      <div class="phase-node model-opus" data-name="financial-analyst">
+        <div class="node-label">Financials</div>
+        <div class="node-model">opus</div>
+      </div>
+      <div class="phase-node model-opus" data-name="research-synthesizer">
+        <div class="node-label">Synthesizer</div>
+        <div class="node-model">opus</div>
+      </div>
+      <div class="phase-node model-sonnet" data-name="executive-synthesizer">
+        <div class="node-label">Exec Brief</div>
+        <div class="node-model">sonnet</div>
+      </div>
+      <div class="phase-node model-sonnet" data-name="flowchart-architect">
+        <div class="node-label">Visuals</div>
+        <div class="node-model">sonnet</div>
+      </div>
+      <div class="phase-node model-sonnet" data-name="prompt-optimizer">
+        <div class="node-label">Optimizer</div>
+        <div class="node-model">sonnet</div>
+      </div>
+    </div>
+    <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
+    <div class="phase-column">
+      <div class="phase-header">Quality</div>
+      <div class="phase-node model-sonnet" data-name="plan-validator">
+        <div class="node-label">Validator</div>
+        <div class="node-model">sonnet</div>
+      </div>
+      <div class="phase-node model-sonnet" data-name="source-verifier">
+        <div class="node-label">Verifier</div>
+        <div class="node-model">sonnet</div>
+      </div>
+    </div>
+    <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
+    <div class="phase-column">
+      <div class="phase-header">Deliver</div>
+      <div class="phase-node model-sonnet" data-name="report-critic">
+        <div class="node-label">Critic</div>
+        <div class="node-model">sonnet</div>
+      </div>
+      <div class="phase-node model-sonnet" data-name="design-agent">
+        <div class="node-label">Designer</div>
+        <div class="node-model">sonnet</div>
+      </div>
+    </div>
   </div>
 
   <div class="progress-panel" id="progressPanel" aria-hidden="true">
@@ -359,9 +414,8 @@ sessionStorage.setItem('threadId', threadId);
 const PHASES = ['Plan', 'Execute', 'Validate', 'Report'];
 let currentPhase = 0;
 
-// Live graph state
-let nameToGroup = {};   // agent/tool name -> SVG <g> element
-let nameToEdges = {};   // agent name -> array of edge <path> elements (from control-agent)
+// Live diagram state
+let nameToGroup = {};   // agent name -> phase-node div element
 
 function setStatus(state, text) {
   document.getElementById('statusDot').className = 'dot ' + state;
@@ -421,33 +475,12 @@ function flashTool(name) {
   setTimeout(function() { g.classList.remove('flash'); }, 600);
 }
 
-function activateEdge(srcName, tgtName) {
-  const container = document.getElementById('graphContainer');
-  container.querySelectorAll('.edge-path').forEach(function(ep) {
-    if (ep.dataset.srcName === srcName && ep.dataset.tgtName === tgtName) {
-      ep.classList.remove('completed');
-      ep.classList.add('active');
-    }
-  });
-}
-
-function completeEdge(srcName, tgtName) {
-  const container = document.getElementById('graphContainer');
-  container.querySelectorAll('.edge-path').forEach(function(ep) {
-    if (ep.dataset.srcName === srcName && ep.dataset.tgtName === tgtName) {
-      ep.classList.remove('active');
-      ep.classList.add('completed');
-    }
-  });
-}
+function activateEdge() {}
+function completeEdge() {}
 
 function resetNodes() {
-  const container = document.getElementById('graphContainer');
-  container.querySelectorAll('.node-group').forEach(function(g) {
-    g.classList.remove('active', 'completed', 'flash');
-  });
-  container.querySelectorAll('.edge-path').forEach(function(ep) {
-    ep.classList.remove('active', 'completed');
+  document.querySelectorAll('.phase-node').forEach(function(el) {
+    el.classList.remove('active', 'completed', 'flash');
   });
 }
 
@@ -561,179 +594,32 @@ document.getElementById('prompt').addEventListener('keydown', function(e) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
 });
 
-// -- Architecture Graph --
+// -- Phase Diagram --
 
-async function loadGraph() {
-  const container = document.getElementById('graphContainer');
-  const loading = document.getElementById('graphLoading');
-  try {
-    const res = await fetch('/api/graph');
-    if (!res.ok) throw new Error('Failed to load graph');
-    const data = await res.json();
-    loading.remove();
-    renderGraph(data, container);
-  } catch (e) {
-    loading.textContent = 'Failed to load architecture: ' + e.message;
-  }
-}
-
-function renderGraph(data, container) {
-  const nodes = data.nodes || [];
-  const edges = data.edges || [];
-  if (!nodes.length) { container.innerHTML = '<div class="graph-loading">No architecture data</div>'; return; }
-
-  // Classify nodes into layers
-  const layers = [[], [], []]; // 0=control, 1=agents, 2=tools
-  const nodeMap = {};
-  nodes.forEach(function(n) {
-    nodeMap[n.id] = n;
-    if (n.name === 'control-agent') { n._layer = 0; layers[0].push(n); }
-    else if (n.type === 'agent') { n._layer = 1; layers[1].push(n); }
-    else { n._layer = 2; layers[2].push(n); }
-  });
-
-  // Layout constants
-  const PAD = 80, LAYER_Y = [60, 220, 380];
-  const LAYER_LABELS = ['Orchestrator', 'Subagents', 'Tools'];
-  const NODE_SIZES = { 0: [140, 44], 1: [110, 36], 2: [100, 32] };
-  const NODE_COLORS = { 0: '#dc2626' };
-  const AGENT_MODEL_COLORS = { opus: '#7c3aed', sonnet: '#0891b2' };
-
-  // Position nodes horizontally within each layer
-  const positions = {};
-  layers.forEach(function(layer, li) {
-    const w = NODE_SIZES[li][0];
-    const gap = li === 2 ? 12 : 20;
-    const totalW = layer.length * w + (layer.length - 1) * gap;
-    const startX = PAD + (li === 0 ? (Math.max(layers[1].length, layers[2].length) * (NODE_SIZES[1][0] + 20) - totalW) / 2 : 0);
-    layer.forEach(function(n, i) {
-      positions[n.id] = { x: startX + i * (w + gap) + w / 2, y: LAYER_Y[li], w: w, h: NODE_SIZES[li][1] };
-    });
-  });
-
-  // Calculate SVG dimensions
-  var maxX = PAD;
-  Object.values(positions).forEach(function(p) { if (p.x + p.w / 2 + PAD > maxX) maxX = p.x + p.w / 2 + PAD; });
-  const svgW = Math.max(maxX, 800);
-  const svgH = LAYER_Y[2] + 60;
-
-  // Build edge connection map for hover
-  const connMap = {}; // nodeId -> Set of connected nodeIds
-  edges.forEach(function(e) {
-    if (!connMap[e.source]) connMap[e.source] = new Set();
-    if (!connMap[e.target]) connMap[e.target] = new Set();
-    connMap[e.source].add(e.target);
-    connMap[e.target].add(e.source);
-  });
-
-  // Get node border color
-  function nodeColor(n) {
-    if (n._layer === 0) return NODE_COLORS[0];
-    if (n._layer === 1) {
-      const tags = (n.tags || []).join(' ');
-      if (tags.includes('opus')) return AGENT_MODEL_COLORS.opus;
-      return AGENT_MODEL_COLORS.sonnet;
-    }
-    return '#059669';
-  }
-
-  // Edge style
-  function edgeStyle(type) {
-    if (type === 'service-call') {
-      return { dash: '', width: 1.5, color: 'var(--text-muted)' };
-    }
-    return { dash: '4 3', width: 1, color: 'var(--text-muted)' };
-  }
-
-  // Build SVG
-  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + svgW + ' ' + svgH + '">';
-
-  // Arrowhead marker
-  svg += '<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">';
-  svg += '<path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-muted)" /></marker></defs>';
-
-  // Layer labels
-  LAYER_LABELS.forEach(function(label, i) {
-    svg += '<text x="12" y="' + (LAYER_Y[i] + 4) + '" class="layer-label">' + label + '</text>';
-  });
-
-  // Edges — include data-src-name and data-tgt-name for live wiring
-  edges.forEach(function(e) {
-    const src = positions[e.source], tgt = positions[e.target];
-    if (!src || !tgt) return;
-    const srcNode = nodeMap[e.source], tgtNode = nodeMap[e.target];
-    const srcName = srcNode ? srcNode.name : '';
-    const tgtName = tgtNode ? tgtNode.name : '';
-    const connType = e.type || 'service-call';
-    const isFeedback = connType === 'service-call' && src.y > tgt.y;
-    const style = isFeedback ? { dash: '6 3', width: 1.5, color: 'var(--text-muted)' } : edgeStyle(connType);
-    const isToolConn = tgt.y > src.y && tgtNode && tgtNode.type === 'service';
-    if (isToolConn) { style.dash = '2 2'; style.width = 1; }
-
-    // Quadratic bezier
-    const midY = (src.y + tgt.y) / 2;
-    const d = 'M ' + src.x + ' ' + (src.y + src.h / 2) + ' Q ' + src.x + ' ' + midY + ' ' + tgt.x + ' ' + (tgt.y - tgt.h / 2);
-    svg += '<path class="edge-path" data-src="' + escapeAttr(e.source) + '" data-tgt="' + escapeAttr(e.target) + '"';
-    svg += ' data-src-name="' + escapeAttr(srcName) + '" data-tgt-name="' + escapeAttr(tgtName) + '"';
-    svg += ' d="' + d + '" stroke="' + style.color + '" stroke-width="' + style.width + '"';
-    if (style.dash) svg += ' stroke-dasharray="' + style.dash + '"';
-    svg += ' marker-end="url(#arrow)" />';
-  });
-
-  // Nodes — include data-name and --node-color for live wiring
-  nodes.forEach(function(n) {
-    const p = positions[n.id];
-    if (!p) return;
-    const color = nodeColor(n);
-    svg += '<g class="node-group" data-id="' + escapeAttr(n.id) + '" data-name="' + escapeAttr(n.name) + '" style="--node-color: ' + color + '">';
-    svg += '<rect class="node-rect" x="' + (p.x - p.w / 2) + '" y="' + (p.y - p.h / 2) + '" width="' + p.w + '" height="' + p.h + '" stroke="' + color + '" />';
-    // Truncate long names
-    const label = n.name.length > 16 ? n.name.slice(0, 15) + '...' : n.name;
-    svg += '<text class="node-text" x="' + p.x + '" y="' + p.y + '">' + escapeHtml(label) + '</text>';
-    svg += '</g>';
-  });
-
-  svg += '</svg>';
-  container.innerHTML = svg;
-
-  // Build nameToGroup map for live wiring
+function initDiagram() {
   nameToGroup = {};
-  container.querySelectorAll('.node-group').forEach(function(g) {
-    const name = g.dataset.name;
-    if (name) nameToGroup[name] = g;
+  document.querySelectorAll('.phase-node[data-name]').forEach(function(el) {
+    nameToGroup[el.dataset.name] = el;
   });
 
-  // Build nameToEdges map
-  nameToEdges = {};
-  container.querySelectorAll('.edge-path').forEach(function(ep) {
-    const src = ep.dataset.srcName;
-    const tgt = ep.dataset.tgtName;
-    if (src && tgt) {
-      if (!nameToEdges[src]) nameToEdges[src] = [];
-      nameToEdges[src].push({ edge: ep, target: tgt });
-    }
-  });
-
-  // Hover interactivity (works alongside live states)
-  container.querySelectorAll('.node-group').forEach(function(g) {
-    g.addEventListener('mouseenter', function() {
-      const id = g.dataset.id;
-      const connected = connMap[id] || new Set();
-      container.querySelectorAll('.node-group').forEach(function(ng) {
-        ng.querySelector('.node-rect').classList.toggle('dimmed', ng.dataset.id !== id && !connected.has(ng.dataset.id));
-      });
-      container.querySelectorAll('.edge-path').forEach(function(ep) {
-        ep.classList.toggle('dimmed', ep.dataset.src !== id && ep.dataset.tgt !== id);
+  // Hover: dim nodes outside hovered node's phase
+  document.querySelectorAll('.phase-node').forEach(function(node) {
+    node.addEventListener('mouseenter', function() {
+      var col = node.closest('.phase-column');
+      document.querySelectorAll('.phase-node').forEach(function(n) {
+        if (n !== node && !col.contains(n)) n.classList.add('dimmed');
       });
     });
-    g.addEventListener('mouseleave', function() {
-      container.querySelectorAll('.dimmed').forEach(function(el) { el.classList.remove('dimmed'); });
+    node.addEventListener('mouseleave', function() {
+      document.querySelectorAll('.phase-node.dimmed').forEach(function(n) {
+        n.classList.remove('dimmed');
+      });
     });
   });
 }
 
-// Load graph on page init
-loadGraph();
+// Init on page load
+initDiagram();
 </script>
 </body>
 </html>"""
