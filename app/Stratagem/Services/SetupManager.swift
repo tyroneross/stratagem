@@ -131,13 +131,9 @@ class SetupManager: ObservableObject {
         )
 
         // Check if venv already has a working stratagem
+        // Use a deep import to avoid namespace package false positives
         if FileManager.default.fileExists(atPath: venvPython) {
-            let importCheck = await runCommand(
-                venvPython,
-                arguments: ["-c", "import stratagem; print('OK')"]
-            )
-
-            if importCheck.contains("OK") {
+            if await verifyStratagem() {
                 stratagemStatus = .installed
                 statusText = ""
                 phase = .chooseDirectory
@@ -171,10 +167,16 @@ class SetupManager: ObservableObject {
 
         statusText = "Installing packages..."
 
-        // Build install args
+        // Build install args — auto-detect source tree if not in explicit dev mode
         var installArgs = ["pip", "install"]
         if developmentMode && !devModePath.isEmpty {
             installArgs += ["-e", devModePath]
+        } else if let sourcePath = detectSourceTree() {
+            // Found local source checkout — install from it
+            installArgs += ["-e", sourcePath]
+            devModePath = sourcePath
+            developmentMode = true
+            statusText = "Installing from source..."
         } else {
             installArgs += ["stratagem"]
         }
@@ -182,23 +184,58 @@ class SetupManager: ObservableObject {
 
         let _ = await runCommandStreaming(uvPath, arguments: installArgs)
 
-        // Verify import works
+        // Verify with a deep import (not just `import stratagem` which matches namespace dirs)
         statusText = "Verifying..."
-        let verifyResult = await runCommand(
-            venvPython,
-            arguments: ["-c", "import stratagem; print('OK')"]
-        )
-
-        if verifyResult.contains("OK") {
+        if await verifyStratagem() {
             stratagemStatus = .installed
             statusText = ""
             phase = .chooseDirectory
         } else {
             stratagemStatus = .failed("Import failed after install")
             phase = .failed(
-                "Packages installed but stratagem couldn't be loaded. Check your internet connection and try again."
+                "Could not load stratagem. If you have the source code, enable Developer Options on the next screen and provide the path."
             )
         }
+    }
+
+    /// Deep import check — avoids false positives from namespace packages
+    private func verifyStratagem() async -> Bool {
+        let result = await runCommand(
+            venvPython,
+            arguments: ["-c", "from stratagem.server import create_stratagem_server; print('OK')"]
+        )
+        return result.contains("OK")
+    }
+
+    /// Auto-detect stratagem source tree by looking for pyproject.toml
+    /// Follows NavGator's pattern: detect context, adapt behavior
+    private func detectSourceTree() -> String? {
+        let home = NSHomeDirectory()
+        var candidates = [
+            (home as NSString).appendingPathComponent("Desktop/git-folder/stratagem"),
+        ]
+
+        // Also check near the project directory
+        if !projectDirectory.isEmpty {
+            let parent = (projectDirectory as NSString).deletingLastPathComponent
+            candidates.append(parent)
+            candidates.append(
+                (parent as NSString).appendingPathComponent("stratagem")
+            )
+        }
+
+        for path in candidates {
+            let pyproject = (path as NSString).appendingPathComponent("pyproject.toml")
+            if FileManager.default.fileExists(atPath: pyproject) {
+                if let content = try? String(contentsOfFile: pyproject, encoding: .utf8),
+                    content.contains("name = \"stratagem\"")
+                {
+                    return path
+                }
+            }
+        }
+
+        return nil
     }
 
     func completeSetup() {
