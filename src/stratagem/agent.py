@@ -69,7 +69,7 @@ Before final answer, include `## Rationale` (2-5 lines): approach chosen and why
 
 ## Output Standards
 
-Save to `.stratagem/artifacts/`. Pyramid structure mandatory. [N] citations for all claims. Markers: ✅ verified · ⚠️ uncertain · ❓ needs verification. Data freshness dates. Numbers: $1.2B, +15% YoY.
+Save to the output directory (see Output Location). Pyramid structure mandatory. [N] citations for all claims. Markers: ✅ verified · ⚠️ uncertain · ❓ needs verification. Data freshness dates. Numbers: $1.2B, +15% YoY.
 """
 
 
@@ -77,6 +77,7 @@ async def run_research(
     prompt: str,
     *,
     cwd: str | Path | None = None,
+    output_dir: str | Path | None = None,
     model: str | None = None,
     max_turns: int | None = None,
     verbose: bool = False,
@@ -87,6 +88,7 @@ async def run_research(
     Args:
         prompt: The research question or task
         cwd: Working directory for file operations
+        output_dir: Directory for output artifacts (None = ask user)
         model: Model to use (e.g., 'opus', 'sonnet')
         max_turns: Maximum agentic turns
         verbose: Print messages as they stream
@@ -109,6 +111,26 @@ async def run_research(
                 + "\n\nUse this context to inform your response. "
                 "Prior artifacts are in `stratagem/artifacts/`."
             )
+
+    # Output directory configuration
+    if output_dir:
+        resolved_output = Path(output_dir).resolve()
+        resolved_output.mkdir(parents=True, exist_ok=True)
+        system += f"""
+
+## Output Location
+
+Default output directory: `{resolved_output}`
+
+Before creating the first artifact, state: "Saving to {resolved_output}" — if the user specified a different path in their prompt, use that instead. Use this directory for all artifacts unless the user redirects.
+"""
+    else:
+        system += """
+
+## Output Location
+
+No output directory was specified. Before creating your first artifact, ask the user where they'd like files saved. Suggest `<working_dir>/output/` as default. Once confirmed, use that directory for all artifacts in this session.
+"""
 
     server = create_stratagem_server()
 

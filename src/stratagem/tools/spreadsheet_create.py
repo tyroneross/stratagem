@@ -102,6 +102,13 @@ async def create_spreadsheet(args: dict[str, Any]) -> dict[str, Any]:
 
     wb.save(output_path)
 
+    saved = Path(output_path).resolve()
+    if not saved.exists():
+        return _error(f"Save completed but file not found at: {saved}")
+    size = saved.stat().st_size
+    if size == 0:
+        return _error(f"File created but is empty: {saved}")
+
     # Register with artifacts system
     try:
         from stratagem.artifacts import register
@@ -117,7 +124,7 @@ async def create_spreadsheet(args: dict[str, Any]) -> dict[str, Any]:
     return {
         "content": [{
             "type": "text",
-            "text": f"Spreadsheet saved: {output_path} ({len(sheets)} sheet(s), {total_rows} data rows)",
+            "text": f"Spreadsheet saved: {saved} ({len(sheets)} sheet(s), {total_rows} data rows, {size:,} bytes)",
         }]
     }
 

@@ -40,6 +40,12 @@ def main():
         help="Working directory for file operations",
     )
     parser.add_argument(
+        "--output-dir", "-o",
+        type=str,
+        default=None,
+        help="Directory for output artifacts (default: ask user or <cwd>/output/)",
+    )
+    parser.add_argument(
         "--fast",
         action="store_true",
         help="Use Sonnet for orchestrator (faster responses, lower cost)",
@@ -127,6 +133,8 @@ def _interactive(args):
 
     print(f"Stratagem v0.1.0 — Market research agent [{mode}]")
     print(f"Thread: {thread_id}")
+    if getattr(args, "output_dir", None):
+        print(f"Output: {Path(args.output_dir).resolve()}")
     print("Type your research question. Ctrl+C or 'exit' to quit.\n")
 
     while True:
@@ -158,6 +166,7 @@ async def _run(args):
 
     prompt = args.prompt if isinstance(args.prompt, str) else " ".join(args.prompt)
     cwd = Path(args.cwd) if args.cwd else Path.cwd()
+    output_dir = Path(args.output_dir).resolve() if getattr(args, "output_dir", None) else None
     verbose = not args.quiet
     thread_id = getattr(args, "thread", None)
 
@@ -180,6 +189,7 @@ async def _run(args):
     async for message in run_research(
         prompt=prompt,
         cwd=cwd,
+        output_dir=output_dir,
         model=model,
         max_turns=args.max_turns,
         verbose=verbose,
