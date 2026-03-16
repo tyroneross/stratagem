@@ -8,7 +8,7 @@ from stratagem.subagents.definitions import SUBAGENTS
 
 class TestServer:
     def test_all_tools_registered(self):
-        assert len(ALL_TOOLS) == 10
+        assert len(ALL_TOOLS) == 12
 
     def test_tool_names(self):
         for name in TOOL_NAMES:
@@ -95,10 +95,10 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 12 agents + 10 tools = 22 components
-        assert index["stats"]["total_components"] == 22
+        # 12 agents + 12 tools = 24 components
+        assert index["stats"]["total_components"] == 24
         assert index["stats"]["components_by_type"]["agent"] == 12
-        assert index["stats"]["components_by_type"]["service"] == 10
+        assert index["stats"]["components_by_type"]["service"] == 12
 
     def test_connection_count(self, tmp_path):
         import json
@@ -122,5 +122,5 @@ class TestNavGator:
         arch_dir = generate_architecture(tmp_path)
         comp_files = list((arch_dir / "components").glob("COMP_*.json"))
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
-        assert len(comp_files) == 22
+        assert len(comp_files) == 24
         assert len(conn_files) == 31
