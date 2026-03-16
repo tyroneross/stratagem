@@ -14,7 +14,7 @@ os.environ.pop("CLAUDECODE", None)
 def main():
     parser = argparse.ArgumentParser(
         prog="stratagem",
-        description="Market research agent — document processing, web scraping, and financial analysis",
+        description="Strategic research agent — document processing, web scraping, and financial analysis",
     )
     parser.add_argument(
         "prompt",
@@ -78,6 +78,32 @@ def main():
         help="Thread ID for context retention (resume or name a thread)",
     )
     parser.add_argument(
+        "--topic",
+        type=str,
+        default=None,
+        help="Topic ID to associate this run with (e.g., 'ai-chip-landscape')",
+    )
+    parser.add_argument(
+        "--input",
+        nargs="+",
+        default=None,
+        metavar="FILE",
+        help="Input files for agents to use (e.g., report.pdf financials.xlsx)",
+    )
+    parser.add_argument(
+        "--memory-budget",
+        type=int,
+        default=None,
+        help="Token budget for memory injection (default: 8000)",
+    )
+    parser.add_argument(
+        "--model-override",
+        action="append",
+        default=None,
+        metavar="NAME:MODEL",
+        help="Per-agent model override (e.g., --model-override data-extractor:haiku). Repeatable.",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 0.1.0",
@@ -131,7 +157,7 @@ def _interactive(args):
     thread_id = getattr(args, "thread", None) or f"cli_{_dt.now():%Y%m%d_%H%M%S}"
     args.thread = thread_id
 
-    print(f"Stratagem v0.1.0 — Market research agent [{mode}]")
+    print(f"Stratagem v0.1.0 — Strategic research agent [{mode}]")
     print(f"Thread: {thread_id}")
     if getattr(args, "output_dir", None):
         print(f"Output: {Path(args.output_dir).resolve()}")
@@ -177,7 +203,7 @@ async def _run(args):
 
     # Ensure working directories exist
     stratagem_dir = cwd / ".stratagem"
-    for subdir in ["cache", "filings", "extractions", "reports", "threads", "artifacts"]:
+    for subdir in ["cache", "filings", "extractions", "reports", "threads", "artifacts", "topics", "agents"]:
         (stratagem_dir / subdir).mkdir(parents=True, exist_ok=True)
     (cwd / "output").mkdir(parents=True, exist_ok=True)
 
@@ -186,14 +212,36 @@ async def _run(args):
         from stratagem.threads import create_thread
         create_thread(thread_id, cwd)
 
+    # Create topic if specified
+    if getattr(args, "topic", None):
+        from stratagem.topics import create_topic
+        create_topic(args.topic, cwd=cwd)
+
+    # Parse --model-override flags into dict
+    model_overrides = None
+    if getattr(args, "model_override", None):
+        model_overrides = {}
+        for override in args.model_override:
+            if ":" in override:
+                name, mdl = override.split(":", 1)
+                model_overrides[name] = mdl
+
+    topic_id = getattr(args, "topic", None)
+    input_files = getattr(args, "input", None)
+    memory_budget = getattr(args, "memory_budget", None)
+
     async for message in run_research(
         prompt=prompt,
         cwd=cwd,
         output_dir=output_dir,
         model=model,
+        model_overrides=model_overrides,
         max_turns=args.max_turns,
         verbose=verbose,
         thread_id=thread_id,
+        topic_id=topic_id,
+        input_files=input_files,
+        memory_budget=memory_budget,
     ):
         pass  # Messages are printed in verbose mode by run_research
 
