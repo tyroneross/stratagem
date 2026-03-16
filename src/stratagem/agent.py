@@ -1,7 +1,9 @@
 """Main agent setup — configures query() with all tools and subagents."""
 
 import asyncio
+import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -20,18 +22,26 @@ from claude_agent_sdk import (
 from stratagem.server import create_stratagem_server, get_all_allowed_tools
 from stratagem.subagents.definitions import SUBAGENTS
 
+# Mutable agents dict for the active run — read by create_specialist tool
+_active_run_agents: dict | None = None
+
+# Dynamic agents created during this run — persisted on completion
+_dynamic_agents_created: dict = {}
+
 # Default system prompt for the control agent
-SYSTEM_PROMPT = """You are Stratagem, the control agent for a market research system. You plan, delegate to specialist subagents, track progress, and ensure quality. You do NOT do detailed extraction or analysis yourself.
+SYSTEM_PROMPT = """You are Stratagem, the control agent for a strategic research system. You plan, delegate to specialist subagents, track progress, and ensure quality. You do NOT do detailed extraction or analysis yourself.
+
+You serve product strategists, corporate strategists, and technology leaders. Questions may span competitive analysis, product strategy, technology landscape, financial analysis, market sizing, or any domain requiring structured research. You don't impose frameworks — you research, structure findings using MECE decomposition and Pyramid Principle, and deliver evidence-based answers.
 
 ## Workflow
 
 1. **Plan**: Delegate to research-planner → get structured task plan. Relay follow-up questions if query is ambiguous.
 2. **Execute**: Delegate tasks to specialists per the plan. Run parallel where possible. Save intermediates to `.stratagem/`.
-   - data-extractor (PDFs, websites, spreadsheets) · financial-analyst (SEC filings, earnings) · research-synthesizer (Pyramid narrative) · executive-synthesizer (SCQA briefs) · flowchart-architect (visuals) · design-agent (layout, Calm Precision) · prompt-optimizer (refine weak queries)
+   - data-extractor (PDFs, websites, documents) · financial-analyst (SEC filings, financials — when relevant) · research-synthesizer (MECE + Pyramid narrative) · executive-synthesizer (SCQA briefs) · flowchart-architect (visuals) · design-agent (layout, Calm Precision) · prompt-optimizer (refine weak queries)
 3. **Validate**: plan-validator checks for drift · source-verifier validates claims against cited sources
 4. **Report**: create_report → report-critic evaluates (threshold: 4.0/5.0). Revise if below. Default: markdown + docx to `.stratagem/reports/`.
 
-Default to subagents. Use agent teams only when research-planner recommends it (cross-referencing, adversarial review, quality gates).
+Default to subagents. Use agent teams only when research-planner recommends it (cross-referencing, adversarial review, quality gates). Dispatch financial-analyst only when the question involves financial data — it is not the default lens.
 
 ## Tools
 
@@ -46,6 +56,27 @@ Document: parse_pdf, read_spreadsheet, read_pptx, create_pptx, extract_images ·
 ## Calculation Policy
 
 All math/statistics/financial calculations MUST run as Python scripts in `.stratagem/scripts/`. Execute via Bash, use verified output in reports. LLM estimation is directional only — Python output is source of truth.
+
+## Dynamic Specialists
+
+If research-planner identifies a capability gap, you may create a temporary specialist using `create_specialist`. Criteria:
+- Genuine gap — no existing agent covers the task adequately
+- Substantial task — not a one-off query you could handle directly
+- Clear instructions — the specialist prompt should be focused and actionable
+
+After creation, dispatch the new specialist by name like any other agent.
+
+## Memory
+
+You have access to research memory from prior runs on this topic. The scaffold summary is injected above. For full details, use Read to load the pointer files listed in the scaffold.
+
+When you or your agents discover something worth remembering:
+- Source reliability (paywalls, stale data, good sources) → record_observation category:source
+- Key verified findings → record_observation category:finding
+- Process learnings (what worked/failed) → record_observation category:process
+- Agent quality assessments → record_observation category:agent
+
+Quality agents (source-verifier, plan-validator, report-critic) may spot-check observations using related_to links. This is routine — not an override.
 
 ## Principles
 
@@ -79,9 +110,13 @@ async def run_research(
     cwd: str | Path | None = None,
     output_dir: str | Path | None = None,
     model: str | None = None,
+    model_overrides: dict[str, str] | None = None,
     max_turns: int | None = None,
     verbose: bool = False,
     thread_id: str | None = None,
+    topic_id: str | None = None,
+    input_files: list[str] | None = None,
+    memory_budget: int | None = None,
 ) -> AsyncIterator:
     """Run a research query using the full Stratagem agent pipeline.
 
@@ -90,14 +125,19 @@ async def run_research(
         cwd: Working directory for file operations
         output_dir: Directory for output artifacts (None = ask user)
         model: Model to use (e.g., 'opus', 'sonnet')
+        model_overrides: Per-agent model overrides
         max_turns: Maximum agentic turns
         verbose: Print messages as they stream
         thread_id: Optional thread ID for context retention across queries
+        topic_id: Optional topic ID for memory grouping
+        input_files: Optional list of input file paths to include in context
+        memory_budget: Optional memory token budget (default 8000)
 
     Yields:
         Messages from the agent
     """
     effective_cwd = Path(cwd) if cwd else Path.cwd()
+    _run_started = datetime.now()
 
     # Inject prior thread context into system prompt
     system = SYSTEM_PROMPT
@@ -111,6 +151,12 @@ async def run_research(
                 + "\n\nUse this context to inform your response. "
                 "Prior artifacts are in `stratagem/artifacts/`."
             )
+
+    # Inject memory scaffold
+    from stratagem.memory import build_scaffold
+    scaffold = build_scaffold(topic_id=topic_id, cwd=effective_cwd)
+    if scaffold:
+        system = scaffold + "\n\n" + system  # Scaffold at context START (high-accuracy zone)
 
     # Output directory configuration
     if output_dir:
@@ -132,14 +178,66 @@ Before creating the first artifact, state: "Saving to {resolved_output}" — if 
 No output directory was specified. Before creating your first artifact, ask the user where they'd like files saved. Suggest `<working_dir>/output/` as default. Once confirmed, use that directory for all artifacts in this session.
 """
 
+    # Input files injection
+    if input_files:
+        file_lines = []
+        for fp in input_files:
+            p = Path(fp).resolve()
+            if p.exists():
+                size = p.stat().st_size
+                suffix = p.suffix.lstrip(".")
+                if size > 1_000_000:
+                    size_str = f"{size / 1_000_000:.1f}MB"
+                else:
+                    size_str = f"{size / 1000:.0f}KB"
+                file_lines.append(f"- {p} ({suffix.upper()}, {size_str})")
+            else:
+                file_lines.append(f"- {fp} (NOT FOUND — file may have moved)")
+        system += "\n\n## Input Files\n\n" + "\n".join(file_lines)
+
+    # Set active thread dir for record_observation tool
+    if thread_id:
+        import stratagem.tools.memory as _mem_mod
+        _mem_mod._active_thread_dir = effective_cwd / ".stratagem" / "threads" / thread_id
+
     server = create_stratagem_server()
+
+    # Build mutable agents dict with model overrides applied
+    global _active_run_agents
+    all_agents: dict[str, AgentDefinition] = {}
+    for name, agent_def in SUBAGENTS.items():
+        override_model = (model_overrides or {}).get(name)
+        if override_model and override_model != agent_def.model:
+            from claude_agent_sdk import AgentDefinition as _AD
+            all_agents[name] = _AD(
+                description=agent_def.description,
+                prompt=agent_def.prompt,
+                tools=agent_def.tools,
+                model=override_model,
+            )
+        else:
+            all_agents[name] = agent_def
+    _active_run_agents = all_agents
+
+    # Load dynamic agents (tier 2 persistent, tier 1 topic-scoped)
+    from stratagem.memory import load_dynamic_agents
+    dynamic = load_dynamic_agents(topic_id=topic_id, cwd=effective_cwd)
+    for name, agent_data in dynamic.items():
+        if name not in all_agents:  # Don't override permanent agents (tier 3)
+            from claude_agent_sdk import AgentDefinition as _AD
+            all_agents[name] = _AD(
+                description=agent_data.get("description", ""),
+                prompt=agent_data.get("prompt", ""),
+                tools=agent_data.get("tools", ["Read", "Write", "WebSearch"]),
+                model=agent_data.get("model", "sonnet"),
+            )
 
     options = ClaudeAgentOptions(
         system_prompt=system,
         mcp_servers={"stratagem": server},
         allowed_tools=get_all_allowed_tools(),
         permission_mode="acceptEdits",
-        agents=SUBAGENTS,
+        agents=all_agents,
         cwd=str(effective_cwd),
         model=model or "opus",  # Control agent uses latest frontier model
         max_turns=max_turns,
@@ -174,6 +272,30 @@ No output directory was specified. Before creating your first artifact, ask the 
                 _print_message(message)
             yield message
     finally:
+        # Clear active thread dir
+        import stratagem.tools.memory as _mem_mod
+        _mem_mod._active_thread_dir = None
+
+        # Post-run: aggregate observations + persist dynamic agents
+        if thread_id:
+            from stratagem.memory import aggregate_observations, persist_dynamic_agents, check_promotion
+            try:
+                aggregate_observations(thread_id=thread_id, topic_id=topic_id, cwd=effective_cwd)
+
+                # Persist any dynamic agents created during this run
+                if _dynamic_agents_created:
+                    persist_dynamic_agents(
+                        definitions=_dynamic_agents_created,
+                        topic_id=topic_id,
+                        cwd=effective_cwd,
+                    )
+
+                # Check promotion criteria
+                check_promotion(cwd=effective_cwd)
+            except Exception:
+                pass  # Memory is valuable but never critical path
+
+        _active_run_agents = None
         # Persist thread entry even if generator abandoned early
         if thread_id and (result_text or turn_count > 0):
             from stratagem.threads import append_entry
@@ -203,6 +325,34 @@ No output directory was specified. Before creating your first artifact, ask the 
                 tools_used=sorted(tools_used),
                 scripts=scripts_written,
             )
+
+        # Write run_state.json
+        if thread_id:
+            run_state = {
+                "thread_id": thread_id,
+                "topic_id": topic_id,
+                "started": _run_started.isoformat() if _run_started else None,
+                "completed": datetime.now().isoformat(),
+                "model": model or "opus",
+                "model_overrides": model_overrides or {},
+                "input_files": input_files or [],
+                "output_dir": str(Path(output_dir).resolve()) if output_dir else None,
+                "memory_budget": memory_budget or 8000,
+                "tools_used": {t: 1 for t in sorted(tools_used)},
+                "total_turns": turn_count,
+                "cost_usd": cost_usd,
+                "dynamic_agents_created": list(_dynamic_agents_created.keys()),
+                "dynamic_agent_definitions": _dynamic_agents_created,
+                "observations_count": 0,
+            }
+            run_state_path = effective_cwd / ".stratagem" / "threads" / thread_id / "run_state.json"
+            try:
+                run_state_path.parent.mkdir(parents=True, exist_ok=True)
+                run_state_path.write_text(json.dumps(run_state, indent=2), encoding="utf-8")
+            except OSError:
+                pass
+
+        _dynamic_agents_created = {}
 
 
 _AGENT_MODELS = {
