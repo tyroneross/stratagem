@@ -22,3 +22,4 @@ venv/
 output/
 *.pyc
 .pytest_cache/
+.DS_Store
