@@ -10,6 +10,8 @@ from stratagem.tools.images import extract_images
 from stratagem.tools.sec_edgar import search_sec_filings, download_sec_filing
 from stratagem.tools.reports import create_report
 from stratagem.tools.spreadsheet_create import create_spreadsheet
+from stratagem.tools.specialist import create_specialist
+from stratagem.tools.memory import record_observation
 
 # All custom tools
 ALL_TOOLS = [
@@ -23,6 +25,8 @@ ALL_TOOLS = [
     download_sec_filing,
     create_report,
     create_spreadsheet,
+    create_specialist,
+    record_observation,
 ]
 
 # Tool names for allowed_tools configuration
