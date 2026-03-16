@@ -16,6 +16,25 @@ from urllib.parse import parse_qs, urlparse
 # Port default
 DEFAULT_PORT = 8420
 
+# Model overrides persisted to .stratagem/agent_config.json
+_model_overrides: dict[str, str] = {}
+
+
+def _load_config():
+    config_path = Path.cwd() / ".stratagem" / "agent_config.json"
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            _model_overrides.update(data.get("model_overrides", {}))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+
+def _save_config():
+    config_path = Path.cwd() / ".stratagem" / "agent_config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps({"model_overrides": _model_overrides}, indent=2), encoding="utf-8")
+
 # Static HTML served inline (single file, no build step)
 _UI_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -292,6 +311,150 @@ body {
 .phase-node.completed .node-model { opacity: 0.7; }
 .phase-node.dimmed { opacity: 0.25; }
 
+/* -- Agent Detail Panel -- */
+.detail-panel {
+  position: fixed;
+  top: 0; right: -400px; width: 400px; height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 100;
+  display: flex; flex-direction: column;
+  transition: right 0.25s ease;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+}
+.detail-panel.open { right: 0; }
+.detail-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-panel-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.detail-close {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: none;
+  font-size: 20px; color: var(--text-muted);
+  cursor: pointer; border-radius: 4px;
+}
+.detail-close:hover { background: var(--border); color: var(--text); }
+.detail-panel-body { flex: 1; overflow-y: auto; padding: 20px; }
+.detail-field { margin-bottom: 16px; }
+.detail-label {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px;
+}
+.detail-model-select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+.detail-prompt {
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; color: var(--text);
+  max-height: 400px; overflow-y: auto;
+  background: var(--bg); padding: 12px;
+  border-radius: 6px; border: 1px solid var(--border);
+  margin: 0;
+}
+.detail-overlay {
+  position: fixed; inset: 0; z-index: 99;
+  background: transparent; display: none;
+}
+.detail-overlay.open { display: block; }
+
+/* -- Config Section (collapsible) -- */
+.config-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-muted);
+  cursor: pointer; user-select: none;
+  padding: 4px 0;
+}
+.config-toggle:hover { color: var(--text); }
+.config-toggle .arrow { transition: transform 0.2s; font-size: 10px; }
+.config-toggle .arrow.open { transform: rotate(90deg); }
+.config-section {
+  display: none;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.config-section.visible { display: flex; flex-direction: column; gap: 12px; }
+.config-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.config-row label {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted);
+  min-width: 100px;
+}
+.config-row input, .config-row select {
+  flex: 1; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text);
+  font-size: 13px; font-family: var(--font);
+  outline: none;
+}
+.config-row input:focus { border-color: var(--accent); }
+.config-save {
+  align-self: flex-end;
+  padding: 6px 16px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); color: var(--text-muted);
+  font-size: 12px; cursor: default;
+  transition: all 0.15s;
+}
+.config-save.active {
+  background: var(--accent); color: white;
+  border-color: var(--accent); cursor: pointer;
+}
+
+/* -- File Input -- */
+.file-input-area {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: center; margin-top: 8px;
+}
+.file-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+}
+.file-chip .remove {
+  cursor: pointer; color: var(--text-muted);
+  font-size: 14px; line-height: 1;
+}
+.file-chip .remove:hover { color: var(--error); }
+.add-file-btn {
+  padding: 4px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: none; color: var(--text-muted);
+  font-size: 12px; cursor: pointer;
+}
+.add-file-btn:hover { border-color: var(--text-muted); color: var(--text); }
+
+/* -- Topic Selector -- */
+.topic-select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+}
+
 .footer {
   padding: 12px 24px;
   border-top: 1px solid var(--border);
@@ -313,11 +476,17 @@ body {
 <div class="main">
   <div class="input-area">
     <textarea id="prompt" placeholder="Enter your research question..." aria-label="Research question"></textarea>
+    <div class="file-input-area" id="fileInputArea">
+      <button class="add-file-btn" onclick="addFileInput()">+ Add files</button>
+    </div>
     <div class="controls">
       <select id="model" aria-label="Orchestrator model">
         <option value="">Orchestrator: Opus (default)</option>
         <option value="sonnet">Orchestrator: Sonnet (fast)</option>
         <option value="haiku">Orchestrator: Haiku (fastest)</option>
+      </select>
+      <select id="topicSelect" class="topic-select" aria-label="Research topic">
+        <option value="">No topic</option>
       </select>
       <button class="btn btn-primary" id="runBtn" onclick="runQuery()" aria-label="Run research query">Run Research</button>
       <button class="btn btn-stop" id="stopBtn" onclick="stopQuery()" style="display:none" aria-label="Stop running query">Stop</button>
@@ -328,10 +497,26 @@ body {
     </div>
   </div>
 
+  <div class="config-toggle" onclick="toggleConfig()">
+    <span class="arrow" id="configArrow">&#x25B6;</span>
+    <span>Settings</span>
+  </div>
+  <div class="config-section" id="configSection">
+    <div class="config-row">
+      <label>Memory budget</label>
+      <input type="number" id="cfgMemBudget" value="8000" min="1000" max="50000" step="1000">
+    </div>
+    <div class="config-row">
+      <label>Output dir</label>
+      <input type="text" id="cfgOutputDir" placeholder=".stratagem/reports/">
+    </div>
+    <button class="config-save" id="cfgSaveBtn" onclick="saveConfig()">Save</button>
+  </div>
+
   <div class="phase-diagram" id="graphContainer">
     <div class="phase-column">
       <div class="phase-header">Plan</div>
-      <div class="phase-node model-sonnet" data-name="research-planner">
+      <div class="phase-node model-sonnet" data-name="research-planner" data-model="sonnet">
         <div class="node-label">Planner</div>
         <div class="node-model">sonnet</div>
       </div>
@@ -339,27 +524,27 @@ body {
     <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
     <div class="phase-column">
       <div class="phase-header">Execute</div>
-      <div class="phase-node model-sonnet" data-name="data-extractor">
+      <div class="phase-node model-sonnet" data-name="data-extractor" data-model="sonnet">
         <div class="node-label">Extractor</div>
         <div class="node-model">sonnet</div>
       </div>
-      <div class="phase-node model-opus" data-name="financial-analyst">
+      <div class="phase-node model-opus" data-name="financial-analyst" data-model="opus">
         <div class="node-label">Financials</div>
         <div class="node-model">opus</div>
       </div>
-      <div class="phase-node model-opus" data-name="research-synthesizer">
+      <div class="phase-node model-opus" data-name="research-synthesizer" data-model="opus">
         <div class="node-label">Synthesizer</div>
         <div class="node-model">opus</div>
       </div>
-      <div class="phase-node model-sonnet" data-name="executive-synthesizer">
+      <div class="phase-node model-sonnet" data-name="executive-synthesizer" data-model="sonnet">
         <div class="node-label">Exec Brief</div>
         <div class="node-model">sonnet</div>
       </div>
-      <div class="phase-node model-sonnet" data-name="flowchart-architect">
+      <div class="phase-node model-sonnet" data-name="flowchart-architect" data-model="sonnet">
         <div class="node-label">Visuals</div>
         <div class="node-model">sonnet</div>
       </div>
-      <div class="phase-node model-sonnet" data-name="prompt-optimizer">
+      <div class="phase-node model-sonnet" data-name="prompt-optimizer" data-model="sonnet">
         <div class="node-label">Optimizer</div>
         <div class="node-model">sonnet</div>
       </div>
@@ -367,11 +552,11 @@ body {
     <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
     <div class="phase-column">
       <div class="phase-header">Quality</div>
-      <div class="phase-node model-sonnet" data-name="plan-validator">
+      <div class="phase-node model-sonnet" data-name="plan-validator" data-model="sonnet">
         <div class="node-label">Validator</div>
         <div class="node-model">sonnet</div>
       </div>
-      <div class="phase-node model-sonnet" data-name="source-verifier">
+      <div class="phase-node model-sonnet" data-name="source-verifier" data-model="sonnet">
         <div class="node-label">Verifier</div>
         <div class="node-model">sonnet</div>
       </div>
@@ -379,11 +564,11 @@ body {
     <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
     <div class="phase-column">
       <div class="phase-header">Deliver</div>
-      <div class="phase-node model-sonnet" data-name="report-critic">
+      <div class="phase-node model-sonnet" data-name="report-critic" data-model="sonnet">
         <div class="node-label">Critic</div>
         <div class="node-model">sonnet</div>
       </div>
-      <div class="phase-node model-sonnet" data-name="design-agent">
+      <div class="phase-node model-sonnet" data-name="design-agent" data-model="sonnet">
         <div class="node-label">Designer</div>
         <div class="node-model">sonnet</div>
       </div>
@@ -401,9 +586,39 @@ body {
   </div>
 
   <div class="output-area" id="output"></div>
+
+  <div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-panel-header">
+      <h2 id="detailName">Agent</h2>
+      <button class="detail-close" onclick="closeDetail()" aria-label="Close panel">&times;</button>
+    </div>
+    <div class="detail-panel-body">
+      <div class="detail-field">
+        <div class="detail-label">Agent ID</div>
+        <div id="detailId" style="font-family:var(--mono);font-size:13px"></div>
+      </div>
+      <div class="detail-field">
+        <div class="detail-label">Phase</div>
+        <div id="detailPhase" style="font-size:13px"></div>
+      </div>
+      <div class="detail-field">
+        <div class="detail-label">Model</div>
+        <select id="detailModel" class="detail-model-select" onchange="updateModel()">
+          <option value="sonnet">Sonnet</option>
+          <option value="opus">Opus</option>
+          <option value="haiku">Haiku</option>
+        </select>
+      </div>
+      <div class="detail-field">
+        <div class="detail-label">System Prompt</div>
+        <pre class="detail-prompt" id="detailPrompt">Loading...</pre>
+      </div>
+    </div>
+  </div>
 </div>
 <div class="footer">
-  Stratagem &mdash; Market research agent powered by Claude
+  Stratagem &mdash; Strategic research agent powered by Claude
 </div>
 <script>
 let eventSource = null;
@@ -505,6 +720,9 @@ function runQuery() {
 
   const params = new URLSearchParams({ prompt, thread_id: threadId });
   if (model) params.set('model', model);
+  var topic = document.getElementById('topicSelect').value;
+  if (topic) params.set('topic_id', topic);
+  if (inputFiles.length) params.set('input_files', inputFiles.join(','));
   eventSource = new EventSource('/api/research?' + params.toString());
 
   eventSource.onmessage = function(e) {
@@ -535,6 +753,8 @@ function runQuery() {
         flashTool(toolName);
         output.innerHTML += '<span class="tool-use">[' + escapeHtml(data.name) + ']</span>\\n';
       }
+    } else if (data.type === 'agent_created') {
+      addDynamicNode(data.name, data.display_name, data.model);
     } else if (data.type === 'done') {
       updateProgress('Complete', 100);
       completeNode('control-agent');
@@ -596,14 +816,123 @@ document.getElementById('prompt').addEventListener('keydown', function(e) {
 
 // -- Phase Diagram --
 
+var AGENT_META = {
+  'research-planner':      { display: 'Planner',     phase: 'Plan' },
+  'data-extractor':        { display: 'Extractor',   phase: 'Execute' },
+  'financial-analyst':     { display: 'Financials',  phase: 'Execute' },
+  'research-synthesizer':  { display: 'Synthesizer', phase: 'Execute' },
+  'executive-synthesizer': { display: 'Exec Brief',  phase: 'Execute' },
+  'flowchart-architect':   { display: 'Visuals',     phase: 'Execute' },
+  'prompt-optimizer':      { display: 'Optimizer',   phase: 'Execute' },
+  'plan-validator':        { display: 'Validator',   phase: 'Quality' },
+  'source-verifier':       { display: 'Verifier',    phase: 'Quality' },
+  'report-critic':         { display: 'Critic',      phase: 'Deliver' },
+  'design-agent':          { display: 'Designer',    phase: 'Deliver' },
+};
+
+var currentDetailAgent = null;
+
+function openDetail(agentName) {
+  currentDetailAgent = agentName;
+  var meta = AGENT_META[agentName] || { display: agentName.replace(/-/g, ' ').replace(/\\b\\w/g, function(c){return c.toUpperCase();}), phase: 'Dynamic' };
+  document.getElementById('detailName').textContent = meta.display;
+  document.getElementById('detailId').textContent = agentName;
+  document.getElementById('detailPhase').textContent = meta.phase;
+  document.getElementById('detailPrompt').textContent = 'Loading...';
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('detailOverlay').classList.add('open');
+
+  var node = nameToGroup[agentName];
+  var currentModel = node ? (node.dataset.model || 'sonnet') : 'sonnet';
+  document.getElementById('detailModel').value = currentModel;
+
+  fetch('/api/agents/' + encodeURIComponent(agentName) + '/prompt')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { document.getElementById('detailPrompt').textContent = d.prompt || 'No prompt found'; })
+    .catch(function() { document.getElementById('detailPrompt').textContent = 'Failed to load prompt'; });
+}
+
+function closeDetail() {
+  currentDetailAgent = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('detailOverlay').classList.remove('open');
+}
+
+function updateModel() {
+  if (!currentDetailAgent) return;
+  var newModel = document.getElementById('detailModel').value;
+  fetch('/api/agents/' + encodeURIComponent(currentDetailAgent) + '/model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: newModel })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      var node = nameToGroup[currentDetailAgent];
+      if (node) {
+        node.dataset.model = newModel;
+        node.className = node.className.replace(/model-\\w+/, 'model-' + newModel);
+        node.querySelector('.node-model').textContent = newModel;
+      }
+    }
+  });
+}
+
+function addDynamicNode(name, displayName, model) {
+  if (nameToGroup[name]) return;
+  var execCol = document.querySelectorAll('.phase-column')[1];
+  var node = document.createElement('div');
+  node.className = 'phase-node model-' + model;
+  node.dataset.name = name;
+  node.dataset.model = model;
+  node.innerHTML = '<div class="node-label">' + escapeHtml(displayName) + '</div>'
+    + '<div class="node-model">' + model + ' \\u2726</div>';
+  node.style.cursor = 'pointer';
+  node.addEventListener('click', function() { openDetail(name); });
+  node.addEventListener('mouseenter', function() {
+    var col = node.closest('.phase-column');
+    document.querySelectorAll('.phase-node').forEach(function(n) {
+      if (n !== node && !col.contains(n)) n.classList.add('dimmed');
+    });
+  });
+  node.addEventListener('mouseleave', function() {
+    document.querySelectorAll('.phase-node.dimmed').forEach(function(n) {
+      n.classList.remove('dimmed');
+    });
+  });
+  execCol.appendChild(node);
+  nameToGroup[name] = node;
+  node.classList.add('active');
+  setTimeout(function() { node.classList.remove('active'); }, 1500);
+}
+
+function loadConfig() {
+  fetch('/api/agents/config')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var overrides = data.model_overrides || {};
+      Object.keys(overrides).forEach(function(name) {
+        var node = nameToGroup[name];
+        if (node) {
+          var model = overrides[name];
+          node.dataset.model = model;
+          node.className = node.className.replace(/model-\\w+/, 'model-' + model);
+          node.querySelector('.node-model').textContent = model;
+        }
+      });
+    }).catch(function() {});
+}
+
 function initDiagram() {
   nameToGroup = {};
   document.querySelectorAll('.phase-node[data-name]').forEach(function(el) {
     nameToGroup[el.dataset.name] = el;
   });
 
-  // Hover: dim nodes outside hovered node's phase
   document.querySelectorAll('.phase-node').forEach(function(node) {
+    node.style.cursor = 'pointer';
+    node.addEventListener('click', function() {
+      if (node.dataset.name) openDetail(node.dataset.name);
+    });
     node.addEventListener('mouseenter', function() {
       var col = node.closest('.phase-column');
       document.querySelectorAll('.phase-node').forEach(function(n) {
@@ -616,10 +945,109 @@ function initDiagram() {
       });
     });
   });
+
+  loadConfig();
 }
+
+// -- Topic selector --
+var inputFiles = [];
+
+function loadTopics() {
+  fetch('/api/topics')
+    .then(function(r) { return r.json(); })
+    .then(function(topics) {
+      var sel = document.getElementById('topicSelect');
+      while (sel.options.length > 1) sel.remove(1);
+      topics.forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.title || t.id;
+        sel.appendChild(opt);
+      });
+    }).catch(function() {});
+}
+
+// -- File input --
+function addFileInput() {
+  var path = prompt('Enter file path:');
+  if (!path || !path.trim()) return;
+  inputFiles.push(path.trim());
+  renderFiles();
+}
+
+function removeFile(idx) {
+  inputFiles.splice(idx, 1);
+  renderFiles();
+}
+
+function renderFiles() {
+  var area = document.getElementById('fileInputArea');
+  area.innerHTML = '';
+  inputFiles.forEach(function(f, i) {
+    var chip = document.createElement('span');
+    chip.className = 'file-chip';
+    chip.innerHTML = escapeHtml(f.split('/').pop())
+      + ' <span class="remove" onclick="removeFile(' + i + ')">&times;</span>';
+    chip.title = f;
+    area.appendChild(chip);
+  });
+  var btn = document.createElement('button');
+  btn.className = 'add-file-btn';
+  btn.textContent = '+ Add files';
+  btn.onclick = addFileInput;
+  area.appendChild(btn);
+}
+
+// -- Config section --
+var configDirty = false;
+
+function toggleConfig() {
+  var section = document.getElementById('configSection');
+  var arrow = document.getElementById('configArrow');
+  section.classList.toggle('visible');
+  arrow.classList.toggle('open');
+}
+
+function markConfigDirty() {
+  configDirty = true;
+  document.getElementById('cfgSaveBtn').classList.add('active');
+}
+
+function saveConfig() {
+  if (!configDirty) return;
+  var body = {
+    memory_budget: parseInt(document.getElementById('cfgMemBudget').value) || 8000,
+    output_dir: document.getElementById('cfgOutputDir').value.trim() || null,
+  };
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      configDirty = false;
+      document.getElementById('cfgSaveBtn').classList.remove('active');
+    }
+  });
+}
+
+function loadFullConfig() {
+  fetch('/api/config')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.memory_budget) document.getElementById('cfgMemBudget').value = data.memory_budget;
+      if (data.output_dir) document.getElementById('cfgOutputDir').value = data.output_dir;
+    }).catch(function() {});
+}
+
+// Wire change detection
+document.getElementById('cfgMemBudget').addEventListener('input', markConfigDirty);
+document.getElementById('cfgOutputDir').addEventListener('input', markConfigDirty);
 
 // Init on page load
 initDiagram();
+loadTopics();
+loadFullConfig();
 </script>
 </body>
 </html>"""
@@ -675,6 +1103,25 @@ class StratagemHandler(BaseHTTPRequestHandler):
             self._handle_threads()
         elif parsed.path == "/api/health":
             self._json_response({"status": "ok", "version": "0.1.0"})
+        elif parsed.path == "/api/topics":
+            self._handle_topics()
+        elif parsed.path == "/api/config":
+            self._handle_get_config()
+        elif parsed.path == "/api/agents/config":
+            self._handle_agents_config()
+        elif parsed.path.startswith("/api/agents/") and parsed.path.endswith("/prompt"):
+            name = parsed.path.split("/")[3]
+            self._handle_agent_prompt(name)
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/agents/") and parsed.path.endswith("/model"):
+            name = parsed.path.split("/")[3]
+            self._handle_set_model(name)
+        elif parsed.path == "/api/config":
+            self._handle_save_config()
         else:
             self.send_error(404)
 
@@ -726,6 +1173,66 @@ class StratagemHandler(BaseHTTPRequestHandler):
         threads = list_threads(Path.cwd())
         self._json_response(threads)
 
+    def _handle_agents_config(self):
+        """Return current agent config (model overrides)."""
+        self._json_response({"model_overrides": _model_overrides})
+
+    def _handle_agent_prompt(self, name):
+        """Return agent system prompt."""
+        from stratagem.subagents.definitions import SUBAGENTS
+        agent = SUBAGENTS.get(name)
+        if not agent:
+            self._json_response({"error": "Unknown agent"}, 404)
+            return
+        self._json_response({"name": name, "prompt": agent.prompt})
+
+    def _handle_set_model(self, name):
+        """Set model override for an agent."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_length))
+        model = body.get("model")
+        if model not in ("sonnet", "opus", "haiku"):
+            self._json_response({"error": "Invalid model"}, 400)
+            return
+        _model_overrides[name] = model
+        _save_config()
+        self._json_response({"ok": True, "name": name, "model": model})
+
+    def _handle_topics(self):
+        from stratagem.topics import list_topics
+        topics = list_topics(cwd=Path.cwd())
+        self._json_response(topics)
+
+    def _handle_get_config(self):
+        config_path = Path.cwd() / ".stratagem" / "agent_config.json"
+        if config_path.exists():
+            try:
+                data = json.loads(config_path.read_text(encoding="utf-8"))
+                self._json_response(data)
+                return
+            except Exception:
+                pass
+        self._json_response({"model_overrides": _model_overrides, "memory_budget": 8000, "output_dir": None})
+
+    def _handle_save_config(self):
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_length))
+        config_path = Path.cwd() / ".stratagem" / "agent_config.json"
+        existing = {}
+        if config_path.exists():
+            try:
+                existing = json.loads(config_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        if "memory_budget" in body:
+            existing["memory_budget"] = body["memory_budget"]
+        if "output_dir" in body:
+            existing["output_dir"] = body["output_dir"]
+        existing["model_overrides"] = _model_overrides
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        self._json_response({"ok": True})
+
     def _handle_research(self, parsed):
         """Stream research results as Server-Sent Events."""
         params = parse_qs(parsed.query)
@@ -737,6 +1244,9 @@ class StratagemHandler(BaseHTTPRequestHandler):
 
         model = params.get("model", [None])[0]
         thread_id = params.get("thread_id", [None])[0]
+        topic_id = params.get("topic_id", [None])[0]
+        input_files_str = params.get("input_files", [None])[0]
+        input_files = input_files_str.split(",") if input_files_str else None
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -755,7 +1265,7 @@ class StratagemHandler(BaseHTTPRequestHandler):
 
         try:
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(self._stream_research(prompt, model, thread_id, send_event))
+            loop.run_until_complete(self._stream_research(prompt, model, thread_id, send_event, topic_id, input_files))
             loop.close()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -767,13 +1277,13 @@ class StratagemHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-    async def _stream_research(self, prompt: str, model: str | None, thread_id: str | None, send_event):
+    async def _stream_research(self, prompt: str, model: str | None, thread_id: str | None, send_event, topic_id=None, input_files=None):
         """Run research and stream events with agent tracking."""
         from stratagem.agent import run_research, AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 
         cwd = Path.cwd()
         stratagem_dir = cwd / ".stratagem"
-        for subdir in ["cache", "filings", "extractions", "reports", "threads", "artifacts"]:
+        for subdir in ["cache", "filings", "extractions", "reports", "threads", "artifacts", "topics", "agents"]:
             (stratagem_dir / subdir).mkdir(parents=True, exist_ok=True)
 
         # Create thread if specified
@@ -781,13 +1291,21 @@ class StratagemHandler(BaseHTTPRequestHandler):
             from stratagem.threads import create_thread
             create_thread(thread_id, cwd)
 
+        # Create topic if specified
+        if topic_id:
+            from stratagem.topics import create_topic
+            create_topic(topic_id, cwd=cwd)
+
         active_agents = set()
 
         async for message in run_research(
             prompt=prompt,
             cwd=cwd,
             model=model,
+            model_overrides=_model_overrides or None,
             thread_id=thread_id,
+            topic_id=topic_id,
+            input_files=input_files,
         ):
             if isinstance(message, AssistantMessage):
                 for block in message.content:
@@ -799,14 +1317,22 @@ class StratagemHandler(BaseHTTPRequestHandler):
                             agent_name = _extract_agent_name(block.input)
                             if agent_name:
                                 action = _AGENT_ACTIONS.get(agent_name, "working")
-                                model = _AGENT_MODELS.get(agent_name, "sonnet")
+                                effective_model = _model_overrides.get(agent_name, _AGENT_MODELS.get(agent_name, "sonnet"))
                                 send_event({
                                     "type": "agent_start",
                                     "name": agent_name,
                                     "action": action,
-                                    "model": model,
+                                    "model": effective_model,
                                 })
                                 active_agents.add(agent_name)
+                        elif block.name == "mcp__stratagem__create_specialist":
+                            spec = block.input if isinstance(block.input, dict) else {}
+                            send_event({
+                                "type": "agent_created",
+                                "name": spec.get("name", "unknown"),
+                                "display_name": spec.get("name", "unknown").replace("-", " ").title(),
+                                "model": spec.get("model", "sonnet"),
+                            })
                         else:
                             send_event({
                                 "type": "tool",
@@ -843,6 +1369,7 @@ def _extract_agent_name(tool_input) -> str | None:
 
 def start_ui(port: int = DEFAULT_PORT):
     """Start the Stratagem web UI server."""
+    _load_config()
     server = HTTPServer(("127.0.0.1", port), StratagemHandler)
     print(f"Stratagem UI running at http://localhost:{port}")
     print("Press Ctrl+C to stop")
