@@ -5,6 +5,7 @@ Aggregation: merges thread observations into topic/common memory post-run.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from stratagem.topics import get_topic, get_topic_memory_path, get_topic_agents_path, link_thread
@@ -210,3 +211,128 @@ def aggregate_observations(
 
         common_path.parent.mkdir(parents=True, exist_ok=True)
         common_path.write_text(json.dumps(common, indent=2), encoding="utf-8")
+
+
+# ── Dynamic Agent Tier Persistence ──
+
+def persist_dynamic_agents(
+    *,
+    definitions: dict[str, dict],
+    topic_id: str | None,
+    cwd: Path,
+) -> None:
+    """Persist dynamic agent definitions created during a run.
+
+    If topic_id is set, saves as tier 1 (topic-scoped).
+    If no topic_id, definitions are only in run_state.json (handled by agent.py).
+    """
+    if not definitions or not topic_id:
+        return
+
+    agents_path = get_topic_agents_path(topic_id, cwd=cwd)
+    existing = _load_json(agents_path)
+    if "agents" not in existing:
+        existing["agents"] = []
+
+    existing_names = {a["name"] for a in existing["agents"]}
+
+    for name, defn in definitions.items():
+        if name in existing_names:
+            # Update existing
+            for a in existing["agents"]:
+                if a["name"] == name:
+                    a["prompt"] = defn.get("prompt", a.get("prompt", ""))
+                    a["model"] = defn.get("model", a.get("model", "sonnet"))
+                    a["tools"] = defn.get("tools", a.get("tools", []))
+                    a["usage"] = a.get("usage", {"total_runs": 0, "topics": []})
+                    a["usage"]["total_runs"] = a["usage"].get("total_runs", 0) + 1
+                    break
+        else:
+            existing["agents"].append({
+                "name": name,
+                "description": defn.get("description", ""),
+                "prompt": defn.get("prompt", ""),
+                "model": defn.get("model", "sonnet"),
+                "tools": defn.get("tools", []),
+                "tier": 1,
+                "created": datetime.now().isoformat(),
+                "origin_topic": topic_id,
+                "usage": {"total_runs": 1, "topics": [topic_id]},
+                "quality": {"avg_confidence": 0, "spot_checks": 0},
+            })
+
+    agents_path.parent.mkdir(parents=True, exist_ok=True)
+    agents_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+
+def load_dynamic_agents(*, topic_id: str | None, cwd: Path) -> dict[str, dict]:
+    """Load dynamic agents: tier 2 (persistent) then tier 1 (topic-scoped).
+
+    Tier 1 overrides tier 2 if same name (most specific scope wins).
+    Returns dict of name -> agent definition dict.
+    """
+    agents: dict[str, dict] = {}
+
+    # Tier 2: persistent agents
+    agents_dir = cwd / ".stratagem" / "agents"
+    if agents_dir.exists():
+        for af in sorted(agents_dir.glob("*.json")):
+            data = _load_json(af)
+            if data and "name" in data:
+                agents[data["name"]] = data
+
+    # Tier 1: topic-scoped (overrides tier 2)
+    if topic_id:
+        agents_path = get_topic_agents_path(topic_id, cwd=cwd)
+        data = _load_json(agents_path)
+        for agent in data.get("agents", []):
+            if "name" in agent:
+                agents[agent["name"]] = agent  # Override tier 2
+
+    return agents
+
+
+def check_promotion(*, cwd: Path) -> list[dict]:
+    """Check if any tier 1 agents should promote to tier 2.
+
+    Criteria: 3+ runs across threads within a topic, quality signal exists.
+    Returns list of promoted agent dicts.
+    """
+    promoted = []
+    topics_dir = cwd / ".stratagem" / "topics"
+    if not topics_dir.exists():
+        return promoted
+
+    agents_dir = cwd / ".stratagem" / "agents"
+    existing_tier2 = set()
+    if agents_dir.exists():
+        for af in agents_dir.glob("*.json"):
+            data = _load_json(af)
+            if data:
+                existing_tier2.add(data.get("name"))
+
+    for topic_dir in topics_dir.iterdir():
+        if not topic_dir.is_dir():
+            continue
+        agents_path = topic_dir / "agents.json"
+        data = _load_json(agents_path)
+        for agent in data.get("agents", []):
+            name = agent.get("name")
+            if not name or name in existing_tier2:
+                continue
+            usage = agent.get("usage", {})
+            total_runs = usage.get("total_runs", 0)
+            quality = agent.get("quality", {})
+            has_quality = quality.get("spot_checks", 0) > 0 or quality.get("avg_confidence", 0) > 0
+
+            if total_runs >= 3 and has_quality and quality.get("avg_confidence", 0) >= 0.7:
+                # Promote to tier 2
+                agent["tier"] = 2
+                agents_dir.mkdir(parents=True, exist_ok=True)
+                (agents_dir / f"{name}.json").write_text(
+                    json.dumps(agent, indent=2), encoding="utf-8"
+                )
+                promoted.append(agent)
+                existing_tier2.add(name)
+
+    return promoted

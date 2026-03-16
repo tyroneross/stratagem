@@ -141,3 +141,103 @@ class TestAggregation:
 
         common = json.loads((tmp_path / ".stratagem" / "memory.json").read_text())
         assert len(common["process"]) == 1
+
+
+class TestTierPersistence:
+    def test_persist_dynamic_agent_tier1(self, tmp_path):
+        from stratagem.memory import persist_dynamic_agents
+
+        create_topic("ai-chips", title="AI Chips", cwd=tmp_path)
+
+        definitions = {
+            "patent-analyst": {
+                "description": "Analyze patent filings",
+                "prompt": "You are a patent analyst...",
+                "model": "sonnet",
+                "tools": ["Read", "Write", "WebSearch"],
+            }
+        }
+
+        persist_dynamic_agents(
+            definitions=definitions,
+            topic_id="ai-chips",
+            cwd=tmp_path,
+        )
+
+        agents_path = tmp_path / ".stratagem" / "topics" / "ai-chips" / "agents.json"
+        assert agents_path.exists()
+        data = json.loads(agents_path.read_text())
+        assert len(data["agents"]) == 1
+        assert data["agents"][0]["name"] == "patent-analyst"
+        assert data["agents"][0]["tier"] == 1
+
+    def test_load_tier1_agents(self, tmp_path):
+        from stratagem.memory import persist_dynamic_agents, load_dynamic_agents
+
+        create_topic("ai-chips", title="AI Chips", cwd=tmp_path)
+        persist_dynamic_agents(
+            definitions={"patent-analyst": {
+                "description": "Analyze patents",
+                "prompt": "You are a patent analyst...",
+                "model": "sonnet",
+                "tools": ["Read"],
+            }},
+            topic_id="ai-chips",
+            cwd=tmp_path,
+        )
+
+        agents = load_dynamic_agents(topic_id="ai-chips", cwd=tmp_path)
+        assert "patent-analyst" in agents
+        assert agents["patent-analyst"]["model"] == "sonnet"
+
+    def test_load_tier2_agents(self, tmp_path):
+        from stratagem.memory import load_dynamic_agents
+
+        agents_dir = tmp_path / ".stratagem" / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        (agents_dir / "regulatory-analyst.json").write_text(json.dumps({
+            "name": "regulatory-analyst",
+            "description": "Compliance analysis",
+            "prompt": "You analyze regulatory...",
+            "model": "sonnet",
+            "tools": ["Read", "WebSearch"],
+            "tier": 2,
+            "usage": {"total_runs": 5, "topics": ["ai-chips", "gpu-market"]},
+            "quality": {"avg_confidence": 0.85, "spot_checks": 2},
+        }))
+
+        agents = load_dynamic_agents(topic_id=None, cwd=tmp_path)
+        assert "regulatory-analyst" in agents
+
+    def test_tier1_overrides_tier2(self, tmp_path):
+        from stratagem.memory import persist_dynamic_agents, load_dynamic_agents
+
+        # Tier 2 agent
+        agents_dir = tmp_path / ".stratagem" / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        (agents_dir / "patent-analyst.json").write_text(json.dumps({
+            "name": "patent-analyst",
+            "description": "General patent analysis",
+            "prompt": "General...",
+            "model": "sonnet",
+            "tools": ["Read"],
+            "tier": 2,
+        }))
+
+        # Tier 1 agent with same name but topic-specific
+        create_topic("ai-chips", title="AI Chips", cwd=tmp_path)
+        persist_dynamic_agents(
+            definitions={"patent-analyst": {
+                "description": "Semiconductor IP analysis",
+                "prompt": "Specialized for semiconductor...",
+                "model": "opus",
+                "tools": ["Read", "WebSearch"],
+            }},
+            topic_id="ai-chips",
+            cwd=tmp_path,
+        )
+
+        agents = load_dynamic_agents(topic_id="ai-chips", cwd=tmp_path)
+        # Tier 1 (topic-scoped) should override tier 2 (persistent)
+        assert agents["patent-analyst"]["description"] == "Semiconductor IP analysis"
+        assert agents["patent-analyst"]["model"] == "opus"
