@@ -1,0 +1,428 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		026874C452C4F20003968490 /* SetupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BECB30C832BA9018B4874D2 /* SetupManager.swift */; };
+		146F9A3C59CAD6D59621BA4C /* OutputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2061B8A6B717F5068DA5C9 /* OutputView.swift */; };
+		16FF3BEDA905EB8BA5B5CB92 /* StratagemApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4C860240F97F428280724B /* StratagemApp.swift */; };
+		2CB7147BEADC9D6B48CD83F5 /* FlowDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD003192441D30B03D34DBE6 /* FlowDiagramView.swift */; };
+		2F878F45C160FC43280AE850 /* FlowDiagramViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2361753C1B05712C511499 /* FlowDiagramViewModel.swift */; };
+		3BFC035D705ABB8729182110 /* ContentArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12A1A1ECDE58031090508841 /* ContentArea.swift */; };
+		573C65D9676449B4BA0C4664 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B51561D2E6DB7EE2B80E8D73 /* Assets.xcassets */; };
+		5A74873EBBB5E6996DCCB70E /* SSEClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF893CEA5EF455F3664496D /* SSEClient.swift */; };
+		5D77C92F9FA32219DB41FC55 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E97FCF037FBC877E86B54EA /* SetupView.swift */; };
+		5EC489D9F98CD3ED445A94FB /* ResearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F584CBD1D28C778FAA84CE26 /* ResearchViewModel.swift */; };
+		6847C055EFD67C5040A776C6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3039034A01932FC3F7B4B75A /* Theme.swift */; };
+		6F2C0A39F4B73825FCDE43E1 /* ResearchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7684C766DDC19C5CD71408E /* ResearchState.swift */; };
+		74DDF14D330CB09BEE9BD7A1 /* QueryInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF8A976CB1A8242BBDB36FD /* QueryInputView.swift */; };
+		77CC053F4A86D8DAD8927469 /* ResearchThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850D9864A73BE68AB1389EA6 /* ResearchThread.swift */; };
+		9542A602A9C509CFEC65BC60 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E4D361281472E13166B2A4 /* MainView.swift */; };
+		AC1D3AFD48ECB869E8AC4D3B /* ThreadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492678F3F0EB65A320B1E724 /* ThreadStore.swift */; };
+		BF15205F0D2818C7F8E299BE /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251E5C1EC50697FA310E5F4B /* SidebarView.swift */; };
+		E3C24176B6BCA2A994AEF01D /* AgentNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47332C93A5DFB546952BF6E0 /* AgentNode.swift */; };
+		EABD32732259507B499C6D18 /* SSEEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6514EB6C5F77F6518D92E8 /* SSEEvent.swift */; };
+		EC613186325AFB8336166037 /* BackendManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC36C4AE80B3ACB1373FA4AA /* BackendManager.swift */; };
+		EFA13EC72DBF1492B37ABCDF /* ThreadRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BACA1F26DCB293ED20771305 /* ThreadRowView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		01B45D78E4C24F3F13E9B2EC /* Stratagem.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stratagem.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A6514EB6C5F77F6518D92E8 /* SSEEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEEvent.swift; sourceTree = "<group>"; };
+		12A1A1ECDE58031090508841 /* ContentArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentArea.swift; sourceTree = "<group>"; };
+		251E5C1EC50697FA310E5F4B /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		2B4C860240F97F428280724B /* StratagemApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StratagemApp.swift; sourceTree = "<group>"; };
+		3039034A01932FC3F7B4B75A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		47332C93A5DFB546952BF6E0 /* AgentNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentNode.swift; sourceTree = "<group>"; };
+		492678F3F0EB65A320B1E724 /* ThreadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadStore.swift; sourceTree = "<group>"; };
+		4E97FCF037FBC877E86B54EA /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		5C2361753C1B05712C511499 /* FlowDiagramViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDiagramViewModel.swift; sourceTree = "<group>"; };
+		5CF8A976CB1A8242BBDB36FD /* QueryInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryInputView.swift; sourceTree = "<group>"; };
+		850D9864A73BE68AB1389EA6 /* ResearchThread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchThread.swift; sourceTree = "<group>"; };
+		92616C28823454CD24B36109 /* Stratagem.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stratagem.entitlements; sourceTree = "<group>"; };
+		9BECB30C832BA9018B4874D2 /* SetupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupManager.swift; sourceTree = "<group>"; };
+		9F2061B8A6B717F5068DA5C9 /* OutputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputView.swift; sourceTree = "<group>"; };
+		A7684C766DDC19C5CD71408E /* ResearchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchState.swift; sourceTree = "<group>"; };
+		B51561D2E6DB7EE2B80E8D73 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BACA1F26DCB293ED20771305 /* ThreadRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadRowView.swift; sourceTree = "<group>"; };
+		DAF893CEA5EF455F3664496D /* SSEClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEClient.swift; sourceTree = "<group>"; };
+		DC36C4AE80B3ACB1373FA4AA /* BackendManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendManager.swift; sourceTree = "<group>"; };
+		DD003192441D30B03D34DBE6 /* FlowDiagramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowDiagramView.swift; sourceTree = "<group>"; };
+		F584CBD1D28C778FAA84CE26 /* ResearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchViewModel.swift; sourceTree = "<group>"; };
+		F6E4D361281472E13166B2A4 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0E6514289B48AC5F99B6C4FF = {
+			isa = PBXGroup;
+			children = (
+				2986782A2BDBF22C47EC6FE1 /* Stratagem */,
+				C149C5A8DAB3F9AFAF8DAE60 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		20BAFBA703BFE6BE08B919EB /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				3039034A01932FC3F7B4B75A /* Theme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		2986782A2BDBF22C47EC6FE1 /* Stratagem */ = {
+			isa = PBXGroup;
+			children = (
+				B51561D2E6DB7EE2B80E8D73 /* Assets.xcassets */,
+				92616C28823454CD24B36109 /* Stratagem.entitlements */,
+				2B4C860240F97F428280724B /* StratagemApp.swift */,
+				749B214E6611AB426E38E007 /* Models */,
+				FD23DABFFC78311F03C54973 /* Services */,
+				20BAFBA703BFE6BE08B919EB /* Theme */,
+				4D0322F0FB4A93B81376F83B /* ViewModels */,
+				31D3C083585FF769C0590721 /* Views */,
+			);
+			path = Stratagem;
+			sourceTree = "<group>";
+		};
+		31D3C083585FF769C0590721 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				12A1A1ECDE58031090508841 /* ContentArea.swift */,
+				DD003192441D30B03D34DBE6 /* FlowDiagramView.swift */,
+				F6E4D361281472E13166B2A4 /* MainView.swift */,
+				9F2061B8A6B717F5068DA5C9 /* OutputView.swift */,
+				5CF8A976CB1A8242BBDB36FD /* QueryInputView.swift */,
+				4E97FCF037FBC877E86B54EA /* SetupView.swift */,
+				251E5C1EC50697FA310E5F4B /* SidebarView.swift */,
+				BACA1F26DCB293ED20771305 /* ThreadRowView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		4D0322F0FB4A93B81376F83B /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				5C2361753C1B05712C511499 /* FlowDiagramViewModel.swift */,
+				F584CBD1D28C778FAA84CE26 /* ResearchViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		749B214E6611AB426E38E007 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				47332C93A5DFB546952BF6E0 /* AgentNode.swift */,
+				A7684C766DDC19C5CD71408E /* ResearchState.swift */,
+				850D9864A73BE68AB1389EA6 /* ResearchThread.swift */,
+				0A6514EB6C5F77F6518D92E8 /* SSEEvent.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		C149C5A8DAB3F9AFAF8DAE60 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				01B45D78E4C24F3F13E9B2EC /* Stratagem.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FD23DABFFC78311F03C54973 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				DC36C4AE80B3ACB1373FA4AA /* BackendManager.swift */,
+				9BECB30C832BA9018B4874D2 /* SetupManager.swift */,
+				DAF893CEA5EF455F3664496D /* SSEClient.swift */,
+				492678F3F0EB65A320B1E724 /* ThreadStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		76152F08719D1E511DEF67FF /* Stratagem */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7E1953F36C4ACA8A4598ACFC /* Build configuration list for PBXNativeTarget "Stratagem" */;
+			buildPhases = (
+				5633205CADD6B69B88BE8B5D /* Sources */,
+				568AEAF7D7EF0D1C25F49AD9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Stratagem;
+			packageProductDependencies = (
+			);
+			productName = Stratagem;
+			productReference = 01B45D78E4C24F3F13E9B2EC /* Stratagem.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		110E7C7FA2A882FE7F6433C0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					76152F08719D1E511DEF67FF = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F2E3B06A579696C07BAD68F1 /* Build configuration list for PBXProject "Stratagem" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 0E6514289B48AC5F99B6C4FF;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				76152F08719D1E511DEF67FF /* Stratagem */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		568AEAF7D7EF0D1C25F49AD9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				573C65D9676449B4BA0C4664 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5633205CADD6B69B88BE8B5D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E3C24176B6BCA2A994AEF01D /* AgentNode.swift in Sources */,
+				EC613186325AFB8336166037 /* BackendManager.swift in Sources */,
+				3BFC035D705ABB8729182110 /* ContentArea.swift in Sources */,
+				2CB7147BEADC9D6B48CD83F5 /* FlowDiagramView.swift in Sources */,
+				2F878F45C160FC43280AE850 /* FlowDiagramViewModel.swift in Sources */,
+				9542A602A9C509CFEC65BC60 /* MainView.swift in Sources */,
+				146F9A3C59CAD6D59621BA4C /* OutputView.swift in Sources */,
+				74DDF14D330CB09BEE9BD7A1 /* QueryInputView.swift in Sources */,
+				6F2C0A39F4B73825FCDE43E1 /* ResearchState.swift in Sources */,
+				77CC053F4A86D8DAD8927469 /* ResearchThread.swift in Sources */,
+				5EC489D9F98CD3ED445A94FB /* ResearchViewModel.swift in Sources */,
+				5A74873EBBB5E6996DCCB70E /* SSEClient.swift in Sources */,
+				EABD32732259507B499C6D18 /* SSEEvent.swift in Sources */,
+				026874C452C4F20003968490 /* SetupManager.swift in Sources */,
+				5D77C92F9FA32219DB41FC55 /* SetupView.swift in Sources */,
+				BF15205F0D2818C7F8E299BE /* SidebarView.swift in Sources */,
+				16FF3BEDA905EB8BA5B5CB92 /* StratagemApp.swift in Sources */,
+				6847C055EFD67C5040A776C6 /* Theme.swift in Sources */,
+				EFA13EC72DBF1492B37ABCDF /* ThreadRowView.swift in Sources */,
+				AC1D3AFD48ECB869E8AC4D3B /* ThreadStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		047CC5748625596019F80152 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Stratagem/Stratagem.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Stratagem;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stratagem.Stratagem;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		826B1AEB10AF118112579D3F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Stratagem/Stratagem.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Stratagem;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stratagem.Stratagem;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		A3F46E4EC0CDB7EC292B82AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = Stratagem;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		ABAC09A8C8D8ACC97EDD408F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = Stratagem;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7E1953F36C4ACA8A4598ACFC /* Build configuration list for PBXNativeTarget "Stratagem" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				826B1AEB10AF118112579D3F /* Debug */,
+				047CC5748625596019F80152 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F2E3B06A579696C07BAD68F1 /* Build configuration list for PBXProject "Stratagem" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABAC09A8C8D8ACC97EDD408F /* Debug */,
+				A3F46E4EC0CDB7EC292B82AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 110E7C7FA2A882FE7F6433C0 /* Project object */;
+}

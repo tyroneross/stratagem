@@ -19,6 +19,11 @@ venv/
 /stratagem/scripts/
 /stratagem/progress.md
 .claude/architecture/
+.bookmark/
+.stratagem/
+.superpowers/
+app/.bookmark/
+app/Stratagem.xcodeproj/xcuserdata/
 output/
 *.pyc
 .pytest_cache/
