@@ -18,6 +18,98 @@ This spec adds an agent-owned memory system so agents learn from past runs, a ti
 - **CLI/UI parity** — both write the same `.stratagem/` state files. No separate paths.
 - **Calm Precision** — all new UI surfaces follow Calm Precision design system: Gestalt grouping, Fitts' law sizing, progressive disclosure, content ≥ chrome, status via text color not badges.
 
+## Design Rationale
+
+This system intentionally separates **doing the work** from **learning from the work**.
+
+### Why a separate meta-learning agent exists
+
+The `after-action-analyst` is not a research worker or builder. It is a debrief and advisory agent. That separation is deliberate:
+
+- **Execution agents optimize for task completion**. They are biased toward momentum and local success.
+- **A debrief agent optimizes for reuse**. It can step back, compare outcome versus mission, and ask what should change next time.
+- **An advisory agent diagnoses bottlenecks**. It can look for slow paths, redundant handoffs, or missing delegation patterns that made the run slower than necessary.
+- **An advisory agent can draft guidance without owning implementation**. It can recommend specs, prompts, or operating notes for other agents to write or execute later.
+- **This prevents memory pollution**. If every agent writes directly into long-term shared memory without review, the system accumulates noise, duplicates, and overfit tactics.
+
+The model is closer to a project retrospective or after-action review than a normal subagent dispatch. Research, validation, and delivery happen in the main loop. Learning happens after the loop, once the evidence from the run is available.
+
+### Why memory is split by scope
+
+Memory is split into **thread**, **topic**, **common**, and emerging **agent-local** concerns because not all lessons generalize equally:
+
+- **Thread memory** captures what happened in one run.
+- **Topic memory** captures things that are likely to matter again for the same subject area.
+- **Common memory** stores cross-topic process lessons.
+- **Agent-local memory** is the right future home for capability-specific tactics ("how financial-analyst should work better"), distinct from subject-matter facts.
+
+This prevents the common failure mode where project-specific facts leak into global policy and distort later runs.
+
+### Why the after-action review runs post-task
+
+The debrief runs after the main answer is produced because:
+
+- mid-run retrospection competes with task execution for context and tokens
+- the full mission record is only available at the end
+- post-run review can inspect the entire run: prompt, tools, observations, dynamic agents, rationale, and output
+
+This keeps the main research loop focused while still making learning first-class.
+
+### Why the system uses artifact-based learning
+
+Learning is persisted as files (`observations.jsonl`, `run_state.json`, `after_action.md`) rather than hidden prompt drift:
+
+- artifacts are inspectable
+- artifacts can be versioned, audited, and replayed
+- artifacts allow future promotion, pruning, and decay policies
+- artifacts make the system safer to evolve than implicit "the model just remembers"
+
+This is the main reusable design pattern for future agent systems: make learning explicit, structured, and reviewable.
+
+### Why promotion is governed instead of automatic everywhere
+
+The system does not treat every useful local behavior as a global best practice. Promotion is gated because:
+
+- repeated success is a better signal than a single good run
+- topic-specific tactics often do not generalize
+- quality signals should be available before memory is broadened
+
+That is why the architecture uses:
+
+- temporary runtime specialists
+- topic-scoped persistence first
+- broader promotion only after repeated use and quality evidence
+
+### Reusable pattern for future agent designs
+
+If this pattern is reused in other agent systems, keep the same core structure:
+
+1. **Work agents** execute the mission.
+2. **Quality agents** verify correctness and drift.
+3. **A debrief agent** performs the retrospective after the mission.
+4. **Memory scopes** prevent overgeneralization.
+5. **Promotion rules** decide what becomes durable capability.
+
+In other words: do not let "memory" mean "everything gets remembered." Make learning a governed pipeline.
+
+### Why the after-action agent is advisory, not implementational
+
+The `after-action-analyst` should primarily:
+
+- diagnose what slowed the run down
+- recommend faster execution patterns
+- identify missing specialists or weak delegation boundaries
+- suggest what specs, prompts, or guidance docs should be written
+
+It should not automatically become the builder for those follow-on tasks. That would blur retrospection with execution again.
+
+The cleaner pattern is:
+
+- **after-action-analyst** identifies and frames the problem
+- **another specialist** implements the fix, writes the spec, or updates the prompt if approved
+
+This keeps the meta-learning layer focused on judgment, not task ownership.
+
 ## 1. Storage Architecture
 
 Three-layer hybrid: thread state, topic memory, common memory.

@@ -107,7 +107,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
         model="sonnet",
     ),
     "after-action-analyst": AgentDefinition(
-        description="Conduct a structured after-action review after each research run. Summarizes mission, execution, lessons learned, capability gaps, and recommended memory updates.",
+        description="Conduct a structured after-action review after each research run. Diagnoses execution quality, speed bottlenecks, capability gaps, and recommends memory updates, new agent specs, or operating guidance for follow-on agents.",
         prompt=_load_prompt("after_action_analyst"),
         tools=["Read"],
         model="sonnet",
