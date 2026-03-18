@@ -16,20 +16,31 @@ def _generate_obs_id() -> str:
     return f"OBS_{now:%Y%m%d_%H%M%S}_{suffix}"
 
 
-def _find_duplicate(obs_path: Path, category: str, content: str) -> str | None:
-    """Check for exact (category, content) match. Returns existing ID or None."""
-    if not obs_path.exists():
-        return None
-    for line in obs_path.read_text(encoding="utf-8").strip().splitlines():
-        if not line.strip():
-            continue
-        try:
-            entry = json.loads(line)
-            if entry.get("category") == category and entry.get("content") == content:
-                return entry.get("id")
-        except json.JSONDecodeError:
-            continue
-    return None
+def _iter_jsonl(path: Path):
+    """Yield JSON objects from a JSONL file, skipping invalid lines."""
+    if not path.exists():
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+
+def _build_observation_index(obs_path: Path) -> dict[tuple[str, str], str]:
+    """Build an in-memory duplicate index for the current thread run."""
+    index: dict[tuple[str, str], str] = {}
+    for entry in _iter_jsonl(obs_path):
+        category = entry.get("category")
+        content = entry.get("content")
+        obs_id = entry.get("id")
+        if isinstance(category, str) and isinstance(content, str) and isinstance(obs_id, str):
+            index[(category, content)] = obs_id
+    return index
 
 
 def _write_observation(
@@ -51,8 +62,14 @@ def _write_observation(
     # Clamp confidence
     confidence = max(0.0, min(1.0, confidence))
 
-    # Dedup check
-    existing_id = _find_duplicate(obs_path, category, content)
+    global _active_observation_index
+    content = content.strip()
+
+    if _active_observation_index is None:
+        _active_observation_index = _build_observation_index(obs_path)
+
+    dedup_key = (category, content)
+    existing_id = _active_observation_index.get(dedup_key)
     if existing_id:
         return {"ok": True, "id": existing_id, "deduplicated": True}
 
@@ -62,7 +79,7 @@ def _write_observation(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "agent": agent,
         "category": category,
-        "content": content.strip(),
+        "content": content,
         "confidence": confidence,
         "tags": tags,
         "scope": scope,
@@ -77,11 +94,13 @@ def _write_observation(
         # Non-critical — log and continue
         return {"ok": True, "id": obs_id, "warning": f"Write failed: {e}"}
 
+    _active_observation_index[dedup_key] = obs_id
     return {"ok": True, "id": obs_id}
 
 
 # Module-level ref to active thread dir — set by agent.py at run start
 _active_thread_dir: Path | None = None
+_active_observation_index: dict[tuple[str, str], str] | None = None
 
 
 @tool(

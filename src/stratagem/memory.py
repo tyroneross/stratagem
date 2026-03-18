@@ -25,24 +25,66 @@ def _common_memory_path(cwd: Path) -> Path:
     return cwd / ".stratagem" / "memory.json"
 
 
+def _iter_jsonl(path: Path):
+    """Yield JSON objects from a JSONL file, skipping invalid lines."""
+    if not path.exists():
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+
 # ── Scaffold Generation ──
 
-def _truncate_to_budget(text: str, budget: int | None) -> str:
+def _truncate_to_budget(text: str, budget: int | None, *, force_marker: bool = False) -> str:
     """Trim scaffold text to an approximate token budget.
 
     We use a simple 4 chars/token heuristic to avoid pulling in a tokenizer.
     """
+    marker = "\n\n[Memory scaffold truncated]"
+
     if not text or budget is None or budget <= 0:
         return text
 
     char_budget = budget * 4
-    if len(text) <= char_budget:
+    if len(text) <= char_budget and not force_marker:
         return text
 
-    clipped = text[: max(char_budget - 24, 0)].rstrip()
+    clipped = text[: max(char_budget - len(marker), 0)].rstrip()
     if not clipped:
         return ""
-    return clipped + "\n\n[Memory scaffold truncated]"
+    return clipped + marker
+
+
+def _append_scaffold_line(
+    lines: list[str],
+    line: str,
+    *,
+    char_budget: int | None,
+    truncated: list[bool],
+) -> bool:
+    """Append a scaffold line if budget allows, reserving room for a truncation marker."""
+    if char_budget is None:
+        lines.append(line)
+        return True
+
+    marker = "\n\n[Memory scaffold truncated]"
+    candidate = "\n".join(lines + [line]) if lines else line
+    reserve = len(marker)
+
+    if len(candidate) <= char_budget:
+        lines.append(line)
+        return True
+
+    if not truncated[0]:
+        truncated[0] = True
+    return False
 
 
 def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None = 8000) -> str:
@@ -50,7 +92,20 @@ def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None
 
     Returns markdown string (~500-800 tokens) or empty string if no memory exists.
     """
-    sections: list[str] = []
+    char_budget = memory_budget * 4 if memory_budget and memory_budget > 0 else None
+    lines: list[str] = []
+    truncated = [False]
+
+    def ensure_header() -> bool:
+        if lines:
+            return True
+        if not add("## Research Memory"):
+            return False
+        add("")
+        return True
+
+    def add(line: str) -> bool:
+        return _append_scaffold_line(lines, line, char_budget=char_budget, truncated=truncated)
 
     # Topic memory
     if topic_id:
@@ -71,63 +126,72 @@ def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None
                 avg_conf = sum(all_confs) / len(all_confs) if all_confs else 0.5
                 conf_label = "high" if avg_conf >= 0.8 else "moderate" if avg_conf >= 0.6 else "low"
 
-                sections.append(f"### Topic: {topic['title']}")
-                sections.append(f"Runs: {run_count} | Last: {last_run[:10]} | Confidence: {conf_label}")
-                sections.append(f"Sources: {source_count} tracked")
-                sections.append(f"Findings: {finding_count} verified")
+                if not ensure_header():
+                    return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
+                add(f"### Topic: {topic['title']}")
+                add(f"Runs: {run_count} | Last: {last_run[:10]} | Confidence: {conf_label}")
+                add(f"Sources: {source_count} tracked")
+                add(f"Findings: {finding_count} verified")
                 if process_count:
-                    sections.append(f"Process: {process_count} learnings")
-                sections.append(f"Details: .stratagem/topics/{topic_id}/memory.json")
+                    add(f"Process: {process_count} learnings")
+                add(f"Details: .stratagem/topics/{topic_id}/memory.json")
 
             # Topic-scoped agents (tier 1)
-            agents_path = get_topic_agents_path(topic_id, cwd=cwd)
-            agents = _load_json(agents_path)
-            if agents.get("agents"):
-                sections.append("")
-                sections.append("### Topic Specialists")
-                for agent in agents["agents"]:
-                    name = agent.get("name", "?")
-                    model = agent.get("model", "sonnet")
-                    desc = agent.get("description", "")[:60]
-                    usage = agent.get("usage", {})
-                    runs = usage.get("total_runs", 0)
-                    quality = agent.get("quality", {})
-                    avg_q = quality.get("avg_confidence", 0)
-                    sections.append(f"- {name} ({model}) — {desc} [{runs} runs, quality: {avg_q:.2f}]")
+            if not truncated[0]:
+                agents_path = get_topic_agents_path(topic_id, cwd=cwd)
+                agents = _load_json(agents_path)
+                if agents.get("agents"):
+                    add("")
+                    if add("### Topic Specialists"):
+                        for agent in agents["agents"]:
+                            name = agent.get("name", "?")
+                            model = agent.get("model", "sonnet")
+                            desc = agent.get("description", "")[:60]
+                            usage = agent.get("usage", {})
+                            runs = usage.get("total_runs", 0)
+                            quality = agent.get("quality", {})
+                            avg_q = quality.get("avg_confidence", 0)
+                            if not add(f"- {name} ({model}) — {desc} [{runs} runs, quality: {avg_q:.2f}]"):
+                                break
 
     # Persistent agents (tier 2)
     agents_dir = cwd / ".stratagem" / "agents"
-    if agents_dir.exists():
+    if not truncated[0] and agents_dir.exists():
         agent_files = sorted(agents_dir.glob("*.json"))
         if agent_files:
-            sections.append("")
-            sections.append("### Persistent Specialists")
-            for af in agent_files:
-                agent = _load_json(af)
-                if agent:
-                    name = agent.get("name", af.stem)
-                    model = agent.get("model", "sonnet")
-                    usage = agent.get("usage", {})
-                    topics_used = usage.get("topics", [])
-                    sections.append(f"- {name} ({model}) — {len(topics_used)} topics")
-            sections.append(f"Catalog: .stratagem/agents/")
+            if not ensure_header():
+                return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
+            add("")
+            if add("### Persistent Specialists"):
+                for af in agent_files:
+                    agent = _load_json(af)
+                    if agent:
+                        name = agent.get("name", af.stem)
+                        model = agent.get("model", "sonnet")
+                        usage = agent.get("usage", {})
+                        topics_used = usage.get("topics", [])
+                        if not add(f"- {name} ({model}) — {len(topics_used)} topics"):
+                            break
+                add("Catalog: .stratagem/agents/")
 
     # Common memory
     common_path = _common_memory_path(cwd)
-    common = _load_json(common_path)
+    common = _load_json(common_path) if not truncated[0] else {}
     if common:
         process_count = len(common.get("process", []))
         if process_count:
-            sections.append("")
-            sections.append("### Common Memory")
-            sections.append(f"Process learnings: {process_count} entries")
-            sections.append(f"Details: .stratagem/memory.json")
+            if not ensure_header():
+                return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
+            add("")
+            add("### Common Memory")
+            add(f"Process learnings: {process_count} entries")
+            add("Details: .stratagem/memory.json")
 
-    if not sections:
+    if not lines:
         return ""
 
-    scaffold = "## Research Memory\n\n" + "\n".join(sections)
-    return _truncate_to_budget(scaffold, memory_budget)
+    scaffold = "\n".join(lines)
+    return _truncate_to_budget(scaffold, memory_budget, force_marker=truncated[0])
 
 
 # ── Post-Run Aggregation ──
@@ -172,13 +236,7 @@ def aggregate_observations(
         return
 
     # Parse observations
-    observations: list[dict] = []
-    for line in obs_path.read_text(encoding="utf-8").strip().splitlines():
-        if line.strip():
-            try:
-                observations.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+    observations = list(_iter_jsonl(obs_path) or [])
 
     if not observations:
         return

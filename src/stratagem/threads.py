@@ -13,7 +13,6 @@ Storage: stratagem/threads/
 
 import fcntl
 import json
-import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -68,6 +67,37 @@ def _write_index(cwd: Path, entries: list[dict]) -> None:
     path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
 
 
+def _tail_jsonl(path: Path, count: int) -> list[dict]:
+    """Read the last N JSONL records without loading the full file."""
+    if count <= 0 or not path.exists():
+        return []
+
+    with open(path, "rb") as f:
+        f.seek(0, 2)
+        file_size = f.tell()
+        chunk_size = 4096
+        buffer = b""
+        pos = file_size
+        newline_target = count + 1
+
+        while pos > 0 and buffer.count(b"\n") < newline_target:
+            read_size = min(chunk_size, pos)
+            pos -= read_size
+            f.seek(pos)
+            buffer = f.read(read_size) + buffer
+
+    records: list[dict] = []
+    for line in buffer.decode("utf-8", errors="ignore").splitlines()[-count:]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return records
+
+
 # ── Public API ──
 
 
@@ -90,6 +120,7 @@ def create_thread(thread_id: str, cwd: Path, title: str | None = None) -> Path:
                 "created": datetime.now().isoformat(),
                 "last_active": datetime.now().isoformat(),
                 "query_count": 0,
+                "message_count": 0,
             })
             _write_index(cwd, index)
 
@@ -138,12 +169,15 @@ def append_entry(
         f.write(json.dumps(entry) + "\n")
 
     # Update index (locked for concurrent safety)
+    message_count = 1
     with _lock_index(cwd):
         index = _read_index(cwd)
         for e in index:
             if e["id"] == thread_id:
                 e["last_active"] = datetime.now().isoformat()
                 e["query_count"] = e.get("query_count", 0) + 1
+                e["message_count"] = e.get("message_count", 0) + 1
+                message_count = e["message_count"]
                 break
         else:
             # Thread wasn't in index — add it
@@ -153,14 +187,15 @@ def append_entry(
                 "created": datetime.now().isoformat(),
                 "last_active": datetime.now().isoformat(),
                 "query_count": 1,
+                "message_count": 1,
             })
         _write_index(cwd, index)
 
     # Rebuild context after appending
-    rebuild_context(thread_id, cwd)
+    rebuild_context(thread_id, cwd, message_count=message_count)
 
 
-def rebuild_context(thread_id: str, cwd: Path) -> None:
+def rebuild_context(thread_id: str, cwd: Path, *, message_count: int | None = None) -> None:
     """Rebuild context.md from messages.jsonl.
 
     Recent entries (last 5) get 3-5 lines each with key findings.
@@ -173,35 +208,27 @@ def rebuild_context(thread_id: str, cwd: Path) -> None:
     if not messages_path.exists():
         return
 
-    entries = []
-    for line in messages_path.read_text(encoding="utf-8").strip().splitlines():
-        line = line.strip()
-        if line:
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+    if message_count is None:
+        index = _read_index(cwd)
+        for entry in index:
+            if entry["id"] == thread_id:
+                message_count = entry.get("message_count")
+                break
+
+    entries = _tail_jsonl(messages_path, 5)
 
     if not entries:
         return
 
     lines: list[str] = []
 
-    # Split into older and recent
-    recent_count = min(5, len(entries))
-    older = entries[:-recent_count] if len(entries) > recent_count else []
-    recent = entries[-recent_count:]
-
-    # Older entries: 1 line each
-    for entry in older:
-        q = entry.get("query", "")[:80]
-        summary = entry.get("result_summary", "")
-        # First sentence or first 100 chars
-        first_line = summary.split("\n")[0][:100] if summary else "No summary"
-        lines.append(f"- **Q**: {q} -> {first_line}")
+    older_count = max((message_count or len(entries)) - len(entries), 0)
+    if older_count:
+        lines.append(f"- {older_count} earlier quer{'y' if older_count == 1 else 'ies'} summarized in history")
+        lines.append("")
 
     # Recent entries: 3-5 lines each
-    for entry in recent:
+    for entry in entries:
         q = entry.get("query", "")
         summary = entry.get("result_summary", "")
         artifacts = entry.get("artifacts", [])
@@ -245,15 +272,7 @@ def get_thread(thread_id: str, cwd: Path) -> dict | None:
         if entry["id"] == thread_id:
             # Enrich with message file info
             tdir = _thread_dir(thread_id, cwd)
-            messages_path = tdir / "messages.jsonl"
-            if messages_path.exists():
-                msg_count = sum(
-                    1 for line in messages_path.read_text(encoding="utf-8").strip().splitlines()
-                    if line.strip()
-                )
-                entry["message_count"] = msg_count
-            else:
-                entry["message_count"] = 0
+            entry.setdefault("message_count", 0)
             entry["has_context"] = (tdir / "context.md").exists()
             return entry
     return None

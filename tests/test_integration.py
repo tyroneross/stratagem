@@ -124,3 +124,22 @@ class TestNavGator:
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
         assert len(comp_files) == 24
         assert len(conn_files) == 31
+
+
+class TestAgentLogging:
+    def test_memory_persistence_errors_are_logged(self, tmp_path):
+        import json
+
+        from stratagem.agent import _log_memory_persistence_error
+
+        try:
+            raise RuntimeError("memory aggregation failed")
+        except RuntimeError as exc:
+            _log_memory_persistence_error(cwd=tmp_path, thread_id="thread_123", exc=exc)
+
+        log_path = tmp_path / ".stratagem" / "logs" / "memory_errors.log"
+        assert log_path.exists()
+        entry = json.loads(log_path.read_text(encoding="utf-8").strip().splitlines()[-1])
+        assert entry["thread_id"] == "thread_123"
+        assert "memory aggregation failed" in entry["error"]
+        assert "RuntimeError" in entry["traceback"]

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator
@@ -105,6 +106,24 @@ Save to the output directory (see Output Location). Pyramid structure mandatory.
 """
 
 
+def _log_memory_persistence_error(*, cwd: Path, thread_id: str | None, exc: Exception) -> None:
+    """Record non-fatal memory persistence failures for later debugging."""
+    log_dir = cwd / ".stratagem" / "logs"
+    log_path = log_dir / "memory_errors.log"
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "thread_id": thread_id,
+        "error": repr(exc),
+        "traceback": traceback.format_exc(),
+    }
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
+
 async def run_research(
     prompt: str,
     *,
@@ -204,6 +223,7 @@ No output directory was specified. Before creating your first artifact, ask the 
     if thread_id:
         import stratagem.tools.memory as _mem_mod
         _mem_mod._active_thread_dir = effective_cwd / ".stratagem" / "threads" / thread_id
+        _mem_mod._active_observation_index = None
 
     server = create_stratagem_server()
 
@@ -281,6 +301,7 @@ No output directory was specified. Before creating your first artifact, ask the 
         # Clear active thread dir
         import stratagem.tools.memory as _mem_mod
         _mem_mod._active_thread_dir = None
+        _mem_mod._active_observation_index = None
 
         # Post-run: aggregate observations + persist dynamic agents
         if thread_id:
@@ -298,8 +319,8 @@ No output directory was specified. Before creating your first artifact, ask the 
 
                 # Check promotion criteria
                 check_promotion(cwd=effective_cwd)
-            except Exception:
-                pass  # Memory is valuable but never critical path
+            except Exception as exc:
+                _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
 
         _active_run_agents = None
         # Persist thread entry even if generator abandoned early
