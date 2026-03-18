@@ -106,6 +106,12 @@ SUBAGENTS: dict[str, AgentDefinition] = {
         tools=["Read"],
         model="sonnet",
     ),
+    "after-action-analyst": AgentDefinition(
+        description="Conduct a structured after-action review after each research run. Summarizes mission, execution, lessons learned, capability gaps, and recommended memory updates.",
+        prompt=_load_prompt("after_action_analyst"),
+        tools=["Read"],
+        model="sonnet",
+    ),
     "plan-validator": AgentDefinition(
         description="Monitor research execution for drift. Spot-checks subagent outputs against the plan using process control methods, detects scope/quality/source/goal drift, and recommends corrective actions.",
         prompt=_load_prompt("plan_validator"),

@@ -30,6 +30,7 @@ AGENT_PHASES = {
     "source-verifier": "quality",
     "report-critic": "delivery",
     "design-agent": "delivery",
+    "after-action-analyst": "learning",
 }
 
 # Model cost tiers

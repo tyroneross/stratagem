@@ -37,6 +37,7 @@ class TestSubagents:
             "research-planner",
             "source-verifier",
             "report-critic",
+            "after-action-analyst",
             "plan-validator",
             "design-agent",
         ]
@@ -95,9 +96,9 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 12 agents + 12 tools = 24 components
-        assert index["stats"]["total_components"] == 24
-        assert index["stats"]["components_by_type"]["agent"] == 12
+        # 13 agents + 12 tools = 25 components
+        assert index["stats"]["total_components"] == 25
+        assert index["stats"]["components_by_type"]["agent"] == 13
         assert index["stats"]["components_by_type"]["service"] == 12
 
     def test_connection_count(self, tmp_path):
@@ -105,8 +106,8 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 11 delegations + 3 feedback + 16 tool uses + 1 control→create_report = 31
-        assert index["stats"]["total_connections"] == 31
+        # 12 delegations + 3 feedback + 16 tool uses + 1 control→create_report = 32
+        assert index["stats"]["total_connections"] == 32
 
     def test_graph_nodes_match_components(self, tmp_path):
         import json
@@ -122,8 +123,8 @@ class TestNavGator:
         arch_dir = generate_architecture(tmp_path)
         comp_files = list((arch_dir / "components").glob("COMP_*.json"))
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
-        assert len(comp_files) == 24
-        assert len(conn_files) == 31
+        assert len(comp_files) == 25
+        assert len(conn_files) == 32
 
 
 class TestAgentLogging:
@@ -143,3 +144,41 @@ class TestAgentLogging:
         assert entry["thread_id"] == "thread_123"
         assert "memory aggregation failed" in entry["error"]
         assert "RuntimeError" in entry["traceback"]
+
+
+class TestAfterActionReview:
+    async def test_after_action_review_written(self, tmp_path):
+        from stratagem.agent import _generate_after_action_review
+
+        thread_dir = tmp_path / ".stratagem" / "threads" / "thread_aar"
+        thread_dir.mkdir(parents=True, exist_ok=True)
+        (thread_dir / "observations.jsonl").write_text(
+            '{"id":"OBS_1","category":"process","content":"Verifier caught weak sourcing"}\n',
+            encoding="utf-8",
+        )
+
+        async def fake_runner(**kwargs):
+            assert "Verifier caught weak sourcing" in kwargs["prompt_text"]
+            return "# After Action Review\n\n## Mission\n- Test mission\n"
+
+        path = await _generate_after_action_review(
+            cwd=tmp_path,
+            thread_id="thread_aar",
+            topic_id="ai-chips",
+            prompt="Assess GPU competition",
+            result_text="Final answer",
+            rationale="Used planner then synthesizer.",
+            turn_count=4,
+            cost_usd=1.23,
+            tools_used={"Read", "WebSearch"},
+            scripts_written=[],
+            dynamic_agents_created={},
+            input_files=None,
+            model_overrides=None,
+            runner=fake_runner,
+        )
+
+        assert path.exists()
+        text = path.read_text(encoding="utf-8")
+        assert "# After Action Review" in text
+        assert "Test mission" in text

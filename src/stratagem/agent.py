@@ -6,7 +6,7 @@ import os
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Awaitable, Callable
 
 # Stratagem is its own agent, not a nested Claude Code session.
 os.environ.pop("CLAUDECODE", None)
@@ -42,6 +42,7 @@ You serve product strategists, corporate strategists, and technology leaders. Qu
    - data-extractor (PDFs, websites, documents) · financial-analyst (SEC filings, financials — when relevant) · research-synthesizer (MECE + Pyramid narrative) · executive-synthesizer (SCQA briefs) · flowchart-architect (visuals) · design-agent (layout, Calm Precision) · prompt-optimizer (refine weak queries)
 3. **Validate**: plan-validator checks for drift · source-verifier validates claims against cited sources
 4. **Report**: create_report → report-critic evaluates (threshold: 4.0/5.0). Revise if below. Default: markdown + docx to `.stratagem/reports/`.
+5. **Learn**: after-action-analyst conducts a post-run debrief and records lessons for future runs.
 
 Default to subagents. Use agent teams only when research-planner recommends it (cross-referencing, adversarial review, quality gates). Dispatch financial-analyst only when the question involves financial data — it is not the default lens.
 
@@ -122,6 +123,223 @@ def _log_memory_persistence_error(*, cwd: Path, thread_id: str | None, exc: Exce
             f.write(json.dumps(entry) + "\n")
     except OSError:
         pass
+
+
+def _tail_text_lines(path: Path, count: int) -> list[str]:
+    """Read the last N text lines from a file."""
+    if count <= 0 or not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = [line.rstrip("\n") for line in f]
+    except OSError:
+        return []
+    return [line for line in lines[-count:] if line.strip()]
+
+
+def _build_after_action_prompt(
+    *,
+    prompt: str,
+    result_text: str,
+    rationale: str | None,
+    thread_id: str,
+    topic_id: str | None,
+    turn_count: int,
+    cost_usd: float | None,
+    tools_used: set[str],
+    scripts_written: list[str],
+    dynamic_agents_created: dict,
+    input_files: list[str] | None,
+    observations: list[str],
+) -> str:
+    """Build the input payload for the after-action analyst."""
+    response_excerpt = result_text[-4000:] if len(result_text) > 4000 else result_text
+    sections = [
+        f"Thread ID: {thread_id}",
+        f"Topic ID: {topic_id or 'none'}",
+        f"Turns: {turn_count}",
+        f"Cost USD: {cost_usd if cost_usd is not None else 'unknown'}",
+        "",
+        "## User Request",
+        prompt,
+        "",
+        "## Final Response Excerpt",
+        response_excerpt or "No final response captured.",
+        "",
+        "## Rationale",
+        rationale or "No explicit rationale captured.",
+        "",
+        "## Tools Used",
+        ", ".join(sorted(tools_used)) if tools_used else "None recorded.",
+        "",
+        "## Scripts Written",
+        "\n".join(f"- {fp}" for fp in scripts_written) if scripts_written else "None.",
+        "",
+        "## Dynamic Agents Created",
+        "\n".join(f"- {name}" for name in sorted(dynamic_agents_created)) if dynamic_agents_created else "None.",
+        "",
+        "## Input Files",
+        "\n".join(f"- {fp}" for fp in (input_files or [])) if input_files else "None.",
+        "",
+        "## Observations",
+        "\n".join(f"- {line}" for line in observations) if observations else "None recorded.",
+    ]
+    return "\n".join(sections).strip()
+
+
+def _fallback_after_action_review(
+    *,
+    prompt: str,
+    result_text: str,
+    rationale: str | None,
+    tools_used: set[str],
+    dynamic_agents_created: dict,
+    observations: list[str],
+    failure: Exception | None = None,
+) -> str:
+    """Generate a deterministic fallback after-action review."""
+    tools_line = ", ".join(sorted(tools_used)) if tools_used else "No tools recorded."
+    observation_preview = observations[:5]
+    lines = [
+        "# After Action Review",
+        "",
+        "## Mission",
+        f"- {prompt[:300]}",
+        "",
+        "## Outcome",
+        f"- Final response captured: {'yes' if result_text.strip() else 'no'}",
+        f"- Explicit rationale captured: {'yes' if rationale else 'no'}",
+        "",
+        "## Sustains",
+        f"- Tool coverage used: {tools_line}",
+        f"- Dynamic specialists created: {len(dynamic_agents_created)}",
+        "",
+        "## Improves",
+        "- Add more explicit source-quality notes when uncertainty remains.",
+        "- Capture clearer success/failure signals for each specialist run.",
+        "",
+        "## Source Assessment",
+        "- Use recorded observations and verifier output to rank source reliability next run.",
+        "",
+        "## Agent Assessment",
+        f"- Dynamic agent count this run: {len(dynamic_agents_created)}",
+        "",
+        "## Memory Recommendations",
+    ]
+    if observation_preview:
+        lines.extend(f"- [topic] Review observation: {line[:180]}" for line in observation_preview)
+    else:
+        lines.append("- [thread] No observations were recorded during this run.")
+    lines.extend([
+        "",
+        "## Capability Gaps",
+        "- No meta-learning inference beyond recorded observations in fallback mode.",
+        "",
+        "## Next Run",
+        "- Ensure verifier/critic outputs are captured explicitly in observations.",
+        "- Promote repeated successful specialists only with evidence.",
+    ])
+    if failure is not None:
+        lines.extend([
+            "",
+            "## Notes",
+            f"- Fallback generated because after-action analyst failed: {failure}",
+        ])
+    return "\n".join(lines)
+
+
+async def _default_after_action_runner(
+    *,
+    system_prompt: str,
+    prompt_text: str,
+    cwd: Path,
+    model: str,
+) -> str:
+    """Run the after-action analyst using the Claude agent SDK."""
+    options = ClaudeAgentOptions(
+        system_prompt=system_prompt,
+        allowed_tools=["Read"],
+        permission_mode="acceptEdits",
+        cwd=str(cwd),
+        model=model,
+        max_turns=1,
+    )
+
+    review_text = ""
+    async for message in query(prompt=prompt_text, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    review_text += block.text
+    return review_text.strip()
+
+
+async def _generate_after_action_review(
+    *,
+    cwd: Path,
+    thread_id: str,
+    topic_id: str | None,
+    prompt: str,
+    result_text: str,
+    rationale: str | None,
+    turn_count: int,
+    cost_usd: float | None,
+    tools_used: set[str],
+    scripts_written: list[str],
+    dynamic_agents_created: dict,
+    input_files: list[str] | None,
+    model_overrides: dict[str, str] | None,
+    runner: Callable[..., Awaitable[str]] | None = None,
+) -> Path:
+    """Generate and persist an after-action review for the completed run."""
+    thread_dir = cwd / ".stratagem" / "threads" / thread_id
+    obs_path = thread_dir / "observations.jsonl"
+    observations = _tail_text_lines(obs_path, 20)
+    agent_def = SUBAGENTS["after-action-analyst"]
+    review_prompt = _build_after_action_prompt(
+        prompt=prompt,
+        result_text=result_text,
+        rationale=rationale,
+        thread_id=thread_id,
+        topic_id=topic_id,
+        turn_count=turn_count,
+        cost_usd=cost_usd,
+        tools_used=tools_used,
+        scripts_written=scripts_written,
+        dynamic_agents_created=dynamic_agents_created,
+        input_files=input_files,
+        observations=observations,
+    )
+    runner = runner or _default_after_action_runner
+    model = (model_overrides or {}).get("after-action-analyst", agent_def.model) or agent_def.model
+
+    failure: Exception | None = None
+    try:
+        review_text = await runner(
+            system_prompt=agent_def.prompt,
+            prompt_text=review_prompt,
+            cwd=cwd,
+            model=model,
+        )
+    except Exception as exc:
+        failure = exc
+        review_text = ""
+
+    if not review_text.strip():
+        review_text = _fallback_after_action_review(
+            prompt=prompt,
+            result_text=result_text,
+            rationale=rationale,
+            tools_used=tools_used,
+            dynamic_agents_created=dynamic_agents_created,
+            observations=observations,
+            failure=failure,
+        )
+
+    report_path = thread_dir / "after_action.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(review_text.strip() + "\n", encoding="utf-8")
+    return report_path
 
 
 async def run_research(
@@ -275,6 +493,7 @@ No output directory was specified. Before creating your first artifact, ask the 
     cost_usd = None
     tools_used: set[str] = set()
     scripts_written: list[str] = []
+    rationale = None
 
     try:
         async for message in query(prompt=prompt, options=options):
@@ -328,7 +547,6 @@ No output directory was specified. Before creating your first artifact, ask the 
             from stratagem.threads import append_entry
 
             # Extract rationale block if present
-            rationale = None
             if "## Rationale" in result_text:
                 idx = result_text.index("## Rationale")
                 rationale_block = result_text[idx + len("## Rationale"):].strip()
@@ -353,6 +571,28 @@ No output directory was specified. Before creating your first artifact, ask the 
                 scripts=scripts_written,
             )
 
+            try:
+                after_action_path = await _generate_after_action_review(
+                    cwd=effective_cwd,
+                    thread_id=thread_id,
+                    topic_id=topic_id,
+                    prompt=prompt,
+                    result_text=result_text,
+                    rationale=rationale,
+                    turn_count=turn_count,
+                    cost_usd=cost_usd,
+                    tools_used=tools_used,
+                    scripts_written=scripts_written,
+                    dynamic_agents_created=_dynamic_agents_created,
+                    input_files=input_files,
+                    model_overrides=model_overrides,
+                )
+            except Exception as exc:
+                after_action_path = None
+                _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
+        else:
+            after_action_path = None
+
         # Write run_state.json
         if thread_id:
             run_state = {
@@ -370,6 +610,7 @@ No output directory was specified. Before creating your first artifact, ask the 
                 "cost_usd": cost_usd,
                 "dynamic_agents_created": list(_dynamic_agents_created.keys()),
                 "dynamic_agent_definitions": _dynamic_agents_created,
+                "after_action_report": str(after_action_path) if after_action_path else None,
                 "observations_count": 0,
             }
             run_state_path = effective_cwd / ".stratagem" / "threads" / thread_id / "run_state.json"
@@ -394,6 +635,7 @@ _AGENT_MODELS = {
     "plan-validator": "sonnet",
     "source-verifier": "sonnet",
     "report-critic": "sonnet",
+    "after-action-analyst": "sonnet",
 }
 
 _AGENT_ACTIONS = {
@@ -408,6 +650,7 @@ _AGENT_ACTIONS = {
     "plan-validator": "checking drift",
     "source-verifier": "verifying sources",
     "report-critic": "evaluating quality",
+    "after-action-analyst": "conducting after-action review",
 }
 
 # ANSI colors

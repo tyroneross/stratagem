@@ -573,6 +573,14 @@ body {
         <div class="node-model">sonnet</div>
       </div>
     </div>
+    <div class="phase-arrow" aria-hidden="true">&#x2192;</div>
+    <div class="phase-column">
+      <div class="phase-header">Learn</div>
+      <div class="phase-node model-sonnet" data-name="after-action-analyst" data-model="sonnet">
+        <div class="node-label">Debrief</div>
+        <div class="node-model">sonnet</div>
+      </div>
+    </div>
   </div>
 
   <div class="progress-panel" id="progressPanel" aria-hidden="true">
@@ -828,6 +836,7 @@ var AGENT_META = {
   'source-verifier':       { display: 'Verifier',    phase: 'Quality' },
   'report-critic':         { display: 'Critic',      phase: 'Deliver' },
   'design-agent':          { display: 'Designer',    phase: 'Deliver' },
+  'after-action-analyst':  { display: 'Debrief',     phase: 'Learn' },
 };
 
 var currentDetailAgent = null;
@@ -1066,6 +1075,7 @@ _AGENT_ACTIONS = {
     "plan-validator": "checking for drift",
     "source-verifier": "verifying sources",
     "report-critic": "evaluating report quality",
+    "after-action-analyst": "running after-action review",
 }
 
 # Model assigned to each subagent (from definitions.py)
@@ -1081,6 +1091,7 @@ _AGENT_MODELS = {
     "plan-validator": "sonnet",
     "source-verifier": "sonnet",
     "report-critic": "sonnet",
+    "after-action-analyst": "sonnet",
 }
 
 
