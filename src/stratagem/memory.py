@@ -25,6 +25,104 @@ def _common_memory_path(cwd: Path) -> Path:
     return cwd / ".stratagem" / "memory.json"
 
 
+def _agent_guidance_dir(cwd: Path) -> Path:
+    return cwd / ".stratagem" / "agent_guidance"
+
+
+def _detail_memory_path(path: Path) -> Path:
+    return path.with_name(f"{path.stem}_detail{path.suffix}")
+
+
+def _load_memory_for_update(path: Path) -> tuple[dict, Path | None]:
+    """Load memory, resolving compressed stores to their detail payload."""
+    data = _load_json(path)
+    if data.get("compressed") and data.get("detail_file"):
+        detail_path = Path(data["detail_file"])
+        detail = _load_json(detail_path)
+        if detail:
+            return detail, detail_path
+    return data, None
+
+
+def should_compress_memory(data: dict) -> bool:
+    """Return True when a memory store is large enough to compact."""
+    total_entries = sum(len(data.get(key, [])) for key in ("sources", "findings", "process"))
+    approx_size = len(json.dumps(data))
+    return total_entries >= 12 or approx_size >= 6000
+
+
+def build_memory_compression_payload(*, data: dict, label: str) -> str:
+    """Build the raw payload for LLM memory compression."""
+    lines = [
+        f"Memory store: {label}",
+        f"Runs: {data.get('run_count', 0)}",
+        f"Last run: {data.get('last_run', 'unknown')}",
+        "",
+        "## Sources",
+    ]
+    for item in data.get("sources", []):
+        lines.append(f"- {item.get('content', '')} (conf={item.get('confidence', 0.5):.2f})")
+    lines.extend(["", "## Findings"])
+    for item in data.get("findings", []):
+        lines.append(f"- {item.get('content', '')} (conf={item.get('confidence', 0.5):.2f})")
+    lines.extend(["", "## Process"])
+    for item in data.get("process", []):
+        lines.append(f"- {item.get('content', '')} (conf={item.get('confidence', 0.5):.2f})")
+    return "\n".join(lines).strip()
+
+
+def fallback_memory_compression(*, data: dict, label: str) -> str:
+    """Deterministic fallback memory compression summary."""
+    top_sources = [item.get("content", "") for item in data.get("sources", [])[:3]]
+    top_findings = [item.get("content", "") for item in data.get("findings", [])[:4]]
+    top_process = [item.get("content", "") for item in data.get("process", [])[:3]]
+    finding_lines = [f"- {item}" for item in top_findings] if top_findings else ["- No findings captured."]
+    source_lines = [f"- {item}" for item in top_sources] if top_sources else ["- No source guidance captured."]
+    process_lines = [f"- {item}" for item in top_process] if top_process else ["- No process guidance captured."]
+    lines = [
+        f"### {label} Summary",
+        f"Runs: {data.get('run_count', 0)} | Last: {str(data.get('last_run', 'unknown'))[:10]}",
+        "",
+        "Key findings:",
+        *finding_lines,
+        "",
+        "Source guidance:",
+        *source_lines,
+        "",
+        "Process guidance:",
+        *process_lines,
+    ]
+    return "\n".join(lines)
+
+
+def write_compressed_memory(
+    *,
+    path: Path,
+    data: dict,
+    summary: str,
+) -> Path:
+    """Write compressed memory plus a detail file."""
+    detail_path = _detail_memory_path(path)
+    detail_path.parent.mkdir(parents=True, exist_ok=True)
+    detail_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    compact = {
+        "compressed": True,
+        "compressed_summary": summary.strip(),
+        "detail_file": str(detail_path),
+        "run_count": data.get("run_count", 0),
+        "last_run": data.get("last_run", ""),
+        "counts": {
+            "sources": len(data.get("sources", [])),
+            "findings": len(data.get("findings", [])),
+            "process": len(data.get("process", [])),
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(compact, indent=2), encoding="utf-8")
+    return detail_path
+
+
 def _iter_jsonl(path: Path):
     """Yield JSON objects from a JSONL file, skipping invalid lines."""
     if not path.exists():
@@ -115,26 +213,41 @@ def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None
             mem = _load_json(mem_path)
 
             if mem:
-                source_count = len(mem.get("sources", []))
-                finding_count = len(mem.get("findings", []))
-                process_count = len(mem.get("process", []))
-                run_count = mem.get("run_count", 0)
-                last_run = mem.get("last_run", "unknown")
+                if mem.get("compressed_summary"):
+                    counts = mem.get("counts", {})
+                    if not ensure_header():
+                        return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
+                    add(f"### Topic: {topic['title']}")
+                    add(f"Runs: {mem.get('run_count', 0)} | Last: {str(mem.get('last_run', 'unknown'))[:10]} | Compressed: yes")
+                    add(f"Sources: {counts.get('sources', 0)} tracked")
+                    add(f"Findings: {counts.get('findings', 0)} verified")
+                    if counts.get("process", 0):
+                        add(f"Process: {counts.get('process', 0)} learnings")
+                    for line in str(mem["compressed_summary"]).splitlines():
+                        if not add(line):
+                            break
+                    add(f"Details: {mem.get('detail_file', f'.stratagem/topics/{topic_id}/memory_detail.json')}")
+                else:
+                    source_count = len(mem.get("sources", []))
+                    finding_count = len(mem.get("findings", []))
+                    process_count = len(mem.get("process", []))
+                    run_count = mem.get("run_count", 0)
+                    last_run = mem.get("last_run", "unknown")
 
-                # Confidence assessment
-                all_confs = [s.get("confidence", 0.5) for s in mem.get("sources", []) + mem.get("findings", [])]
-                avg_conf = sum(all_confs) / len(all_confs) if all_confs else 0.5
-                conf_label = "high" if avg_conf >= 0.8 else "moderate" if avg_conf >= 0.6 else "low"
+                    # Confidence assessment
+                    all_confs = [s.get("confidence", 0.5) for s in mem.get("sources", []) + mem.get("findings", [])]
+                    avg_conf = sum(all_confs) / len(all_confs) if all_confs else 0.5
+                    conf_label = "high" if avg_conf >= 0.8 else "moderate" if avg_conf >= 0.6 else "low"
 
-                if not ensure_header():
-                    return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
-                add(f"### Topic: {topic['title']}")
-                add(f"Runs: {run_count} | Last: {last_run[:10]} | Confidence: {conf_label}")
-                add(f"Sources: {source_count} tracked")
-                add(f"Findings: {finding_count} verified")
-                if process_count:
-                    add(f"Process: {process_count} learnings")
-                add(f"Details: .stratagem/topics/{topic_id}/memory.json")
+                    if not ensure_header():
+                        return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
+                    add(f"### Topic: {topic['title']}")
+                    add(f"Runs: {run_count} | Last: {last_run[:10]} | Confidence: {conf_label}")
+                    add(f"Sources: {source_count} tracked")
+                    add(f"Findings: {finding_count} verified")
+                    if process_count:
+                        add(f"Process: {process_count} learnings")
+                    add(f"Details: .stratagem/topics/{topic_id}/memory.json")
 
             # Topic-scoped agents (tier 1)
             if not truncated[0]:
@@ -170,7 +283,8 @@ def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None
                         model = agent.get("model", "sonnet")
                         usage = agent.get("usage", {})
                         topics_used = usage.get("topics", [])
-                        if not add(f"- {name} ({model}) — {len(topics_used)} topics"):
+                        guidance_count = len(load_agent_guidance(name=name, cwd=cwd))
+                        if not add(f"- {name} ({model}) — {len(topics_used)} topics, guidance: {guidance_count}"):
                             break
                 add("Catalog: .stratagem/agents/")
 
@@ -178,14 +292,26 @@ def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None
     common_path = _common_memory_path(cwd)
     common = _load_json(common_path) if not truncated[0] else {}
     if common:
-        process_count = len(common.get("process", []))
-        if process_count:
+        if common.get("compressed_summary"):
             if not ensure_header():
                 return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
             add("")
             add("### Common Memory")
-            add(f"Process learnings: {process_count} entries")
-            add("Details: .stratagem/memory.json")
+            counts = common.get("counts", {})
+            add(f"Process learnings: {counts.get('process', 0)} entries")
+            for line in str(common["compressed_summary"]).splitlines():
+                if not add(line):
+                    break
+            add(f"Details: {common.get('detail_file', '.stratagem/memory_detail.json')}")
+        else:
+            process_count = len(common.get("process", []))
+            if process_count:
+                if not ensure_header():
+                    return _truncate_to_budget("\n".join(lines), memory_budget, force_marker=True)
+                add("")
+                add("### Common Memory")
+                add(f"Process learnings: {process_count} entries")
+                add("Details: .stratagem/memory.json")
 
     if not lines:
         return ""
@@ -249,7 +375,7 @@ def aggregate_observations(
     if topic_id:
         link_thread(topic_id, thread_id, cwd=cwd)
         mem_path = get_topic_memory_path(topic_id, cwd=cwd)
-        mem = _load_json(mem_path)
+        mem, _ = _load_memory_for_update(mem_path)
 
         # Initialize structure
         for key in ("sources", "findings", "process"):
@@ -274,7 +400,7 @@ def aggregate_observations(
     # Merge common-scope observations into common memory
     if common_obs:
         common_path = _common_memory_path(cwd)
-        common = _load_json(common_path)
+        common, _ = _load_memory_for_update(common_path)
         if "process" not in common:
             common["process"] = []
 
@@ -367,6 +493,59 @@ def load_dynamic_agents(*, topic_id: str | None, cwd: Path) -> dict[str, dict]:
                 agents[agent["name"]] = agent  # Override tier 2
 
     return agents
+
+
+def load_agent_guidance(*, name: str, cwd: Path) -> list[dict]:
+    """Load persistent guidance notes for a specialist."""
+    path = _agent_guidance_dir(cwd) / f"{name}.json"
+    data = _load_json(path)
+    notes = data.get("guidance", [])
+    return notes if isinstance(notes, list) else []
+
+
+def persist_agent_guidance(
+    *,
+    recommendations: list[dict],
+    cwd: Path,
+) -> dict[str, int]:
+    """Persist agent-scoped guidance recommendations.
+
+    Each recommendation should contain `agent`, `content`, and optional metadata.
+    """
+    written: dict[str, int] = {}
+    if not recommendations:
+        return written
+
+    guidance_dir = _agent_guidance_dir(cwd)
+    guidance_dir.mkdir(parents=True, exist_ok=True)
+
+    for rec in recommendations:
+        name = rec.get("agent")
+        content = rec.get("content")
+        if not isinstance(name, str) or not name or not isinstance(content, str) or not content.strip():
+            continue
+        path = guidance_dir / f"{name}.json"
+        data = _load_json(path)
+        guidance = data.get("guidance", [])
+        if not isinstance(guidance, list):
+            guidance = []
+
+        if any(entry.get("content") == content.strip() for entry in guidance if isinstance(entry, dict)):
+            continue
+
+        guidance.append({
+            "content": content.strip(),
+            "source_thread": rec.get("source_thread"),
+            "source_topic": rec.get("source_topic"),
+            "confidence": rec.get("confidence", 0.7),
+            "updated": datetime.now().isoformat(),
+        })
+        data["name"] = name
+        data["guidance"] = guidance
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        written[name] = len(guidance)
+
+    return written
 
 
 def check_promotion(*, cwd: Path) -> list[dict]:

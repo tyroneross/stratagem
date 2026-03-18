@@ -242,6 +242,140 @@ def _track_budget_event(warnings: list[str], message: str) -> None:
         warnings.append(message)
 
 
+def _extract_markdown_section(text: str, heading: str) -> str | None:
+    marker = f"## {heading}"
+    if marker not in text:
+        marker = f"### {heading}"
+        if marker not in text:
+            return None
+    idx = text.index(marker) + len(marker)
+    remainder = text[idx:].lstrip()
+    next_heading = remainder.find("\n## ")
+    next_subheading = remainder.find("\n### ")
+    candidates = [pos for pos in (next_heading, next_subheading) if pos >= 0]
+    end = min(candidates) if candidates else len(remainder)
+    section = remainder[:end].strip()
+    return section or None
+
+
+def _extract_handoff_artifacts(result_text: str) -> dict[str, str]:
+    """Extract machine-usable handoff sections from the accumulated output."""
+    sections = {}
+    for key in ("Delegation Budget Fit", "Handoff Artifacts", "Handoff"):
+        value = _extract_markdown_section(result_text, key)
+        if value:
+            sections[key.lower().replace(" ", "_")] = value
+    return sections
+
+
+def _detect_orchestration_antipatterns(
+    *,
+    delegation_budget: dict[str, object],
+    agent_dispatches: list[dict],
+    orchestration_warnings: list[str],
+) -> list[str]:
+    """Detect deterministic orchestration anti-patterns from runtime data."""
+    findings: list[str] = list(orchestration_warnings)
+    names = [entry.get("name") for entry in agent_dispatches if entry.get("name")]
+    if len(agent_dispatches) > int(delegation_budget["max_agent_dispatches"]):
+        findings.append("Over-delegation: agent dispatch count exceeded the planned budget.")
+    if names.count("data-extractor") > 1 and "Duplicate extraction" not in " ".join(findings):
+        findings.append("Duplicate extraction: data-extractor was dispatched multiple times; confirm each pass added new evidence.")
+    if names.count("research-synthesizer") > 1:
+        findings.append("Repeated synthesis: research-synthesizer was dispatched multiple times; verify that revisions were targeted rather than full rewrites.")
+    if "report-critic" in names and "source-verifier" not in names:
+        findings.append("Late quality skew: report-critic ran without source-verifier; claims may have been critiqued before factual validation.")
+    return findings
+
+
+def _extract_agent_guidance_candidates(
+    *,
+    review_text: str,
+    thread_id: str,
+    topic_id: str | None,
+) -> list[dict]:
+    """Extract agent-local guidance bullets from the after-action review."""
+    candidates: list[dict] = []
+    for line in review_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith(("-", "*")):
+            continue
+        body = stripped[1:].strip()
+        if not body.startswith("[agent:"):
+            continue
+        end = body.find("]")
+        if end <= len("[agent:"):
+            continue
+        agent_name = body[len("[agent:"):end]
+        content = body[end + 1:].lstrip(" -:")
+        if agent_name and content:
+            candidates.append({
+                "agent": agent_name,
+                "content": content,
+                "source_thread": thread_id,
+                "source_topic": topic_id,
+                "confidence": 0.75,
+            })
+    return candidates
+
+
+async def _default_memory_compression_runner(
+    *,
+    prompt_text: str,
+    cwd: Path,
+    model: str,
+) -> str:
+    """Run a compact memory summarization prompt."""
+    system_prompt = (
+        "You compress research memory into a compact reusable summary. "
+        "Preserve the 80/20: most reusable findings, source guidance, and process guidance. "
+        "Do not restate everything. Keep under 220 words in markdown."
+    )
+    options = ClaudeAgentOptions(
+        system_prompt=system_prompt,
+        allowed_tools=[],
+        permission_mode="acceptEdits",
+        cwd=str(cwd),
+        model=model,
+        max_turns=1,
+    )
+    summary = ""
+    async for message in query(prompt=prompt_text, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    summary += block.text
+    return summary.strip()
+
+
+@traceable(name="stratagem_memory_compression")
+async def _compress_memory_store(
+    *,
+    cwd: Path,
+    label: str,
+    path: Path,
+    data: dict,
+    model: str,
+    runner: Callable[..., Awaitable[str]] | None = None,
+) -> Path | None:
+    """Compress a memory store into summary + detail file."""
+    from stratagem.memory import build_memory_compression_payload, fallback_memory_compression, write_compressed_memory
+
+    runner = runner or _default_memory_compression_runner
+    summary = ""
+    try:
+        summary = await runner(
+            prompt_text=build_memory_compression_payload(data=data, label=label),
+            cwd=cwd,
+            model=model,
+        )
+    except Exception:
+        summary = ""
+    if not summary.strip():
+        summary = fallback_memory_compression(data=data, label=label)
+    return write_compressed_memory(path=path, data=data, summary=summary)
+
+
 def _build_after_action_prompt(
     *,
     prompt: str,
@@ -259,6 +393,8 @@ def _build_after_action_prompt(
     delegation_budget: dict[str, object] | None = None,
     agent_dispatches: list[dict] | None = None,
     orchestration_warnings: list[str] | None = None,
+    anti_patterns: list[str] | None = None,
+    handoff_artifacts: dict[str, str] | None = None,
 ) -> str:
     """Build the input payload for the after-action analyst."""
     response_excerpt = result_text[-4000:] if len(result_text) > 4000 else result_text
@@ -298,6 +434,12 @@ def _build_after_action_prompt(
         "## Orchestration Warnings",
         "\n".join(f"- {item}" for item in (orchestration_warnings or [])) if orchestration_warnings else "None.",
         "",
+        "## Anti-Patterns",
+        "\n".join(f"- {item}" for item in (anti_patterns or [])) if anti_patterns else "None detected.",
+        "",
+        "## Handoff Artifacts",
+        json.dumps(handoff_artifacts or {}, indent=2, sort_keys=True),
+        "",
         "## Observations",
         "\n".join(f"- {line}" for line in observations) if observations else "None recorded.",
     ]
@@ -314,6 +456,7 @@ def _fallback_after_action_review(
     observations: list[str],
     delegation_budget: dict[str, object] | None = None,
     orchestration_warnings: list[str] | None = None,
+    anti_patterns: list[str] | None = None,
     failure: Exception | None = None,
 ) -> str:
     """Generate a deterministic fallback after-action review."""
@@ -364,6 +507,12 @@ def _fallback_after_action_review(
             "",
             "## Speed Opportunities",
             *[f"- {item}" for item in orchestration_warnings[:5]],
+        ])
+    if anti_patterns:
+        lines.extend([
+            "",
+            "## Capability Gaps",
+            *[f"- {item}" for item in anti_patterns[:5]],
         ])
     if failure is not None:
         lines.extend([
@@ -419,8 +568,10 @@ async def _generate_after_action_review(
     delegation_budget: dict[str, object],
     agent_dispatches: list[dict],
     orchestration_warnings: list[str],
+    anti_patterns: list[str],
+    handoff_artifacts: dict[str, str],
     runner: Callable[..., Awaitable[str]] | None = None,
-) -> Path:
+) -> tuple[Path, str]:
     """Generate and persist an after-action review for the completed run."""
     thread_dir = cwd / ".stratagem" / "threads" / thread_id
     obs_path = thread_dir / "observations.jsonl"
@@ -442,6 +593,8 @@ async def _generate_after_action_review(
         delegation_budget=delegation_budget,
         agent_dispatches=agent_dispatches,
         orchestration_warnings=orchestration_warnings,
+        anti_patterns=anti_patterns,
+        handoff_artifacts=handoff_artifacts,
     )
     runner = runner or _default_after_action_runner
     model = (model_overrides or {}).get("after-action-analyst", agent_def.model) or agent_def.model
@@ -468,13 +621,14 @@ async def _generate_after_action_review(
             observations=observations,
             delegation_budget=delegation_budget,
             orchestration_warnings=orchestration_warnings,
+            anti_patterns=anti_patterns,
             failure=failure,
         )
 
     report_path = thread_dir / "after_action.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(review_text.strip() + "\n", encoding="utf-8")
-    return report_path
+    return report_path, review_text.strip()
 
 
 async def run_research(
@@ -704,6 +858,13 @@ No output directory was specified. Before creating your first artifact, ask the 
                     _print_message(message)
                 yield message
         finally:
+            anti_patterns = _detect_orchestration_antipatterns(
+                delegation_budget=delegation_budget,
+                agent_dispatches=agent_dispatches,
+                orchestration_warnings=orchestration_warnings,
+            )
+            handoff_artifacts = _extract_handoff_artifacts(result_text)
+
             # Clear active thread dir
             import stratagem.tools.memory as _mem_mod
             _mem_mod._active_thread_dir = None
@@ -711,9 +872,43 @@ No output directory was specified. Before creating your first artifact, ask the 
 
             # Post-run: aggregate observations + persist dynamic agents
             if thread_id:
-                from stratagem.memory import aggregate_observations, persist_dynamic_agents, check_promotion
+                from stratagem.memory import (
+                    aggregate_observations,
+                    persist_dynamic_agents,
+                    check_promotion,
+                    should_compress_memory,
+                    _common_memory_path,
+                    get_topic_memory_path,
+                    _load_memory_for_update,
+                )
                 try:
                     aggregate_observations(thread_id=thread_id, topic_id=topic_id, cwd=effective_cwd)
+
+                    compressed_memory = {}
+                    if topic_id:
+                        topic_memory_path = get_topic_memory_path(topic_id, cwd=effective_cwd)
+                        topic_memory, _ = _load_memory_for_update(topic_memory_path)
+                        if topic_memory and should_compress_memory(topic_memory):
+                            detail_path = await _compress_memory_store(
+                                cwd=effective_cwd,
+                                label=f"Topic {topic_id}",
+                                path=topic_memory_path,
+                                data=topic_memory,
+                                model=(model_overrides or {}).get("after-action-analyst", "sonnet"),
+                            )
+                            compressed_memory["topic"] = str(detail_path) if detail_path else None
+
+                    common_memory_path = _common_memory_path(effective_cwd)
+                    common_memory, _ = _load_memory_for_update(common_memory_path)
+                    if common_memory and should_compress_memory(common_memory):
+                        detail_path = await _compress_memory_store(
+                            cwd=effective_cwd,
+                            label="Common Memory",
+                            path=common_memory_path,
+                            data=common_memory,
+                            model=(model_overrides or {}).get("after-action-analyst", "sonnet"),
+                        )
+                        compressed_memory["common"] = str(detail_path) if detail_path else None
 
                     # Persist any dynamic agents created during this run
                     if _dynamic_agents_created:
@@ -726,12 +921,16 @@ No output directory was specified. Before creating your first artifact, ask the 
                     # Check promotion criteria
                     check_promotion(cwd=effective_cwd)
                 except Exception as exc:
+                    compressed_memory = {}
                     _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
+            else:
+                compressed_memory = {}
 
             _active_run_agents = None
             # Persist thread entry even if generator abandoned early
             if thread_id and (result_text or turn_count > 0):
                 from stratagem.threads import append_entry
+                from stratagem.memory import persist_agent_guidance
 
                 # Extract rationale block if present
                 if "## Rationale" in result_text:
@@ -759,7 +958,7 @@ No output directory was specified. Before creating your first artifact, ask the 
                 )
 
                 try:
-                    after_action_path = await _generate_after_action_review(
+                    after_action_path, after_action_text = await _generate_after_action_review(
                         cwd=effective_cwd,
                         thread_id=thread_id,
                         topic_id=topic_id,
@@ -776,12 +975,24 @@ No output directory was specified. Before creating your first artifact, ask the 
                         delegation_budget=delegation_budget,
                         agent_dispatches=agent_dispatches,
                         orchestration_warnings=orchestration_warnings,
+                        anti_patterns=anti_patterns,
+                        handoff_artifacts=handoff_artifacts,
+                    )
+                    guidance_updates = persist_agent_guidance(
+                        recommendations=_extract_agent_guidance_candidates(
+                            review_text=after_action_text,
+                            thread_id=thread_id,
+                            topic_id=topic_id,
+                        ),
+                        cwd=effective_cwd,
                     )
                 except Exception as exc:
                     after_action_path = None
+                    guidance_updates = {}
                     _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
             else:
                 after_action_path = None
+                guidance_updates = {}
 
             # Write run_state.json
             if thread_id:
@@ -797,7 +1008,11 @@ No output directory was specified. Before creating your first artifact, ask the 
                     "memory_budget": memory_budget or 8000,
                     "delegation_budget": delegation_budget,
                     "orchestration_warnings": orchestration_warnings,
+                    "orchestration_antipatterns": anti_patterns,
                     "agents_dispatched": agent_dispatches,
+                    "handoff_artifacts": handoff_artifacts,
+                    "agent_guidance_updates": guidance_updates,
+                    "compressed_memory": compressed_memory,
                     "langsmith_tracing": {
                         "enabled": tracing_enabled(),
                         "project": project_name(),

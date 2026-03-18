@@ -178,11 +178,14 @@ class TestAfterActionReview:
             delegation_budget={"mode": "standard"},
             agent_dispatches=[],
             orchestration_warnings=[],
+            anti_patterns=[],
+            handoff_artifacts={},
             runner=fake_runner,
         )
 
-        assert path.exists()
-        text = path.read_text(encoding="utf-8")
+        report_path, text = path
+        assert report_path.exists()
+        text = report_path.read_text(encoding="utf-8")
         assert "# After Action Review" in text
         assert "Test mission" in text
 
@@ -214,3 +217,36 @@ class TestOrchestrationPolicy:
         assert budget["max_agent_dispatches"] == 7
         assert budget["max_validation_passes"] == 2
         assert budget["finance_bias"] is True
+
+
+class TestMemoryCompression:
+    async def test_memory_compression_writes_detail_file(self, tmp_path):
+        import json
+
+        from stratagem.agent import _compress_memory_store
+
+        async def fake_runner(**kwargs):
+            assert "Memory store: Topic ai-chips" in kwargs["prompt_text"]
+            return "### Topic Summary\n- Compressed memory summary."
+
+        mem_path = tmp_path / ".stratagem" / "topics" / "ai-chips" / "memory.json"
+        detail_path = await _compress_memory_store(
+            cwd=tmp_path,
+            label="Topic ai-chips",
+            path=mem_path,
+            data={
+                "sources": [{"content": "SEC EDGAR is reliable", "confidence": 0.9}],
+                "findings": [{"content": "NVIDIA leads training GPUs", "confidence": 0.9}],
+                "process": [{"content": "Use verifier before critic", "confidence": 0.8}],
+                "run_count": 4,
+                "last_run": "2026-03-14T10:00:00",
+            },
+            model="sonnet",
+            runner=fake_runner,
+        )
+
+        assert detail_path is not None
+        assert detail_path.exists()
+        compact = json.loads(mem_path.read_text(encoding="utf-8"))
+        assert compact["compressed"] is True
+        assert "Compressed memory summary" in compact["compressed_summary"]

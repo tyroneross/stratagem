@@ -79,6 +79,28 @@ class TestScaffoldGeneration:
         assert "[Memory scaffold truncated]" in scaffold
         assert len(scaffold) <= 20 * 4 + len("\n\n[Memory scaffold truncated]")
 
+    def test_scaffold_reads_compressed_topic_memory(self, tmp_path):
+        from stratagem.memory import build_scaffold, write_compressed_memory
+
+        create_topic("ai-chips", title="AI Chip Landscape", cwd=tmp_path)
+        mem_path = tmp_path / ".stratagem" / "topics" / "ai-chips" / "memory.json"
+        write_compressed_memory(
+            path=mem_path,
+            data={
+                "sources": [{"content": "SEC EDGAR is reliable", "confidence": 0.9}],
+                "findings": [{"content": "NVIDIA leads training GPUs", "confidence": 0.9}],
+                "process": [{"content": "Use verifier before critic", "confidence": 0.8}],
+                "run_count": 4,
+                "last_run": "2026-03-14T10:00:00",
+            },
+            summary="### Topic Summary\n- Keep SEC as primary source.",
+        )
+
+        scaffold = build_scaffold(topic_id="ai-chips", cwd=tmp_path)
+        assert "Compressed: yes" in scaffold
+        assert "Keep SEC as primary source." in scaffold
+        assert "memory_detail.json" in scaffold
+
 
 class TestAggregation:
     def test_aggregate_observations_to_topic(self, tmp_path):
@@ -265,3 +287,39 @@ class TestTierPersistence:
         # Tier 1 (topic-scoped) should override tier 2 (persistent)
         assert agents["patent-analyst"]["description"] == "Semiconductor IP analysis"
         assert agents["patent-analyst"]["model"] == "opus"
+
+
+class TestAgentGuidance:
+    def test_persist_and_load_agent_guidance(self, tmp_path):
+        from stratagem.memory import persist_agent_guidance, load_agent_guidance
+
+        updates = persist_agent_guidance(
+            recommendations=[{
+                "agent": "financial-analyst",
+                "content": "Prefer SEC primary tables before secondary summaries.",
+                "source_thread": "thread_1",
+                "source_topic": "ai-chips",
+                "confidence": 0.9,
+            }],
+            cwd=tmp_path,
+        )
+
+        assert updates["financial-analyst"] == 1
+        guidance = load_agent_guidance(name="financial-analyst", cwd=tmp_path)
+        assert len(guidance) == 1
+        assert guidance[0]["content"] == "Prefer SEC primary tables before secondary summaries."
+
+    def test_guidance_deduplicates_by_content(self, tmp_path):
+        from stratagem.memory import persist_agent_guidance, load_agent_guidance
+
+        rec = {
+            "agent": "research-synthesizer",
+            "content": "Keep the governing thought in the first paragraph.",
+            "source_thread": "thread_1",
+            "source_topic": "ai-chips",
+        }
+        persist_agent_guidance(recommendations=[rec], cwd=tmp_path)
+        persist_agent_guidance(recommendations=[rec], cwd=tmp_path)
+
+        guidance = load_agent_guidance(name="research-synthesizer", cwd=tmp_path)
+        assert len(guidance) == 1
