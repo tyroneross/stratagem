@@ -230,6 +230,9 @@ async def _run(args):
     input_files = getattr(args, "input", None)
     memory_budget = getattr(args, "memory_budget", None)
 
+    if verbose:
+        print("\033[2m▸ Running...\033[0m", flush=True)
+
     async for message in run_research(
         prompt=prompt,
         cwd=cwd,
