@@ -175,6 +175,9 @@ class TestAfterActionReview:
             dynamic_agents_created={},
             input_files=None,
             model_overrides=None,
+            delegation_budget={"mode": "standard"},
+            agent_dispatches=[],
+            orchestration_warnings=[],
             runner=fake_runner,
         )
 
@@ -182,3 +185,32 @@ class TestAfterActionReview:
         text = path.read_text(encoding="utf-8")
         assert "# After Action Review" in text
         assert "Test mission" in text
+
+
+class TestOrchestrationPolicy:
+    def test_delegation_budget_stays_lean_for_simple_tasks(self):
+        from stratagem.agent import _derive_delegation_budget
+
+        budget = _derive_delegation_budget(
+            prompt="Summarize this PDF into a short brief.",
+            input_files=["/tmp/report.pdf"],
+            thread_id=None,
+        )
+
+        assert budget["mode"] == "lean"
+        assert budget["max_agent_dispatches"] == 3
+        assert budget["max_dynamic_specialists"] == 0
+
+    def test_delegation_budget_expands_for_complex_tasks(self):
+        from stratagem.agent import _derive_delegation_budget
+
+        budget = _derive_delegation_budget(
+            prompt="Compare NVIDIA, AMD, and Intel across AI accelerators, market landscape, and financial strategy using SEC filings and multiple documents.",
+            input_files=["/tmp/a.pdf", "/tmp/b.xlsx"],
+            thread_id="thread_123",
+        )
+
+        assert budget["mode"] == "deep"
+        assert budget["max_agent_dispatches"] == 7
+        assert budget["max_validation_passes"] == 2
+        assert budget["finance_bias"] is True

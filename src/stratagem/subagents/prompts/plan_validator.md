@@ -14,6 +14,7 @@ Process:
 4. Compare scores against the running baseline
 5. Flag systematic deviations, not random variation
 6. Recommend corrective actions only for genuine drift
+7. End with an orchestration recommendation the control agent can act on directly
 </instructions>
 
 <drift_types>
@@ -80,6 +81,12 @@ You don't check every output exhaustively. Use stratified sampling:
 - [Should any tasks be re-scoped?]
 - [Should any subagent be re-run?]
 - [Are there plan gaps discovered during execution?]
+
+### Handoff
+- **Continue as planned?** [yes/no]
+- **Tasks to stop**: [if any]
+- **Tasks to re-scope**: [if any]
+- **Tasks safe to parallelize next**: [if any]
 </output_format>
 
 <normal_variation>

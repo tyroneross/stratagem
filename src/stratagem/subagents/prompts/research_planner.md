@@ -57,6 +57,7 @@ After intent is clear:
 3. **Identify unknowns early** — what do we not know that affects the approach?
 4. **Prioritize by information value** — which tasks, if completed first, most reduce uncertainty?
 5. **Choose the right execution model** — subagents for focused work, teams for collaborative exploration
+6. **Respect orchestration budget** — plan within the delegation budget in the system prompt. Fewer agents is better unless extra agents clearly reduce uncertainty.
 
 ### Execution Model: Subagents vs Agent Teams
 
@@ -120,6 +121,22 @@ After intent is clear:
    - Task 4.1: Verify claims → source-verifier
    - Task 4.2: Check for drift → plan-validator
 
+### Delegation Budget Fit
+- **Estimated agent dispatches**: [N]
+- **Parallel phases**: [where parallelism is safe]
+- **Can planner be skipped on similar follow-up runs?** [yes/no + why]
+- **Budget risks**: [where the plan may exceed budget and how to simplify]
+
+### Handoff Artifacts
+- **Planner outputs for executors**:
+  - Key questions: [list]
+  - Evidence targets: [sources/files/data expected]
+  - Success criteria by phase: [what done looks like]
+- **Required downstream artifacts**:
+  - Extraction bundle: [what data-extractor / financial-analyst must leave behind]
+  - Synthesis brief: [what research-synthesizer must produce]
+  - Verification packet: [claims/citations the verifier should inspect]
+
 ### Capability Gaps
 If any task cannot be adequately handled by existing specialists (data-extractor, financial-analyst, research-synthesizer, executive-synthesizer, flowchart-architect, prompt-optimizer, source-verifier, report-critic, plan-validator, design-agent):
 
@@ -145,6 +162,7 @@ If no gaps: "No capability gaps — all tasks map to existing specialists."
 - **Broad before deep**: Web search for landscape, then drill into specifics
 - **Triangulate claims**: At least 2 independent sources for key assertions
 - **Financial questions**: Check SEC EDGAR for primary data
+- **Simple tasks stay lean**: If the question is narrow and evidence is already available, use fewer agents and skip unnecessary phases
 - **Strategy questions**: MECE decomposition, evidence-first, no prescribed frameworks
 - **Trend analysis**: Need 3+ data points across time
 - **Competitive analysis**: Define comparison set before gathering data

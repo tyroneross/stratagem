@@ -86,6 +86,7 @@ Quality agents (source-verifier, plan-validator, report-critic) may spot-check o
 - Context isolation per subagent · Progress to `.stratagem/progress.md` · Minimal intervention — intervene on drift/failure only
 - Compound error: each agent adds variance — only add agents that reduce total variance · 2+ independent sources for key claims
 - Fail fast — adapt plan, don't retry blindly
+- Require structured handoffs — planner, validators, critic, and debrief should leave explicit next-step guidance, not just prose summaries
 
 ## Artifact Verification — MANDATORY
 
@@ -137,6 +138,109 @@ def _tail_text_lines(path: Path, count: int) -> list[str]:
     return [line for line in lines[-count:] if line.strip()]
 
 
+def _derive_delegation_budget(
+    *,
+    prompt: str,
+    input_files: list[str] | None,
+    thread_id: str | None,
+) -> dict[str, object]:
+    """Derive orchestration limits from task shape.
+
+    The goal is not perfect classification. It is to give the control agent an
+    explicit operating envelope so delegation is less improvised.
+    """
+    text = prompt.lower()
+    complexity = 0
+
+    complex_signals = (
+        "compare",
+        "competitive",
+        "landscape",
+        "market sizing",
+        "strategy",
+        "strategic",
+        "financial",
+        "earnings",
+        "10-k",
+        "10q",
+        "due diligence",
+        "build vs buy",
+        "technology",
+        "multi",
+    )
+    if any(token in text for token in complex_signals):
+        complexity += 2
+    if len(prompt) > 400:
+        complexity += 1
+    if input_files and len(input_files) >= 2:
+        complexity += 1
+    if thread_id:
+        complexity += 1
+
+    if complexity >= 4:
+        mode = "deep"
+        budget = {
+            "mode": mode,
+            "max_agent_dispatches": 7,
+            "max_parallel_tasks": 4,
+            "max_validation_passes": 2,
+            "max_dynamic_specialists": 2,
+            "planner_mode": "required",
+        }
+    elif complexity >= 2:
+        mode = "standard"
+        budget = {
+            "mode": mode,
+            "max_agent_dispatches": 5,
+            "max_parallel_tasks": 3,
+            "max_validation_passes": 1,
+            "max_dynamic_specialists": 1,
+            "planner_mode": "recommended",
+        }
+    else:
+        mode = "lean"
+        budget = {
+            "mode": mode,
+            "max_agent_dispatches": 3,
+            "max_parallel_tasks": 2,
+            "max_validation_passes": 1,
+            "max_dynamic_specialists": 0,
+            "planner_mode": "skip-if-simple",
+        }
+
+    budget["finance_bias"] = any(token in text for token in ("financial", "earnings", "10-k", "10q", "sec"))
+    budget["document_bias"] = bool(input_files) or any(token in text for token in ("pdf", "spreadsheet", "ppt", "document"))
+    budget["thread_context_available"] = bool(thread_id)
+    return budget
+
+
+def _format_delegation_budget(budget: dict[str, object]) -> str:
+    """Render delegation policy for the system prompt."""
+    return f"""
+
+## Orchestration Budget
+
+Mode: `{budget["mode"]}`
+- Max agent dispatches: {budget["max_agent_dispatches"]}
+- Max parallel tasks in a phase: {budget["max_parallel_tasks"]}
+- Max validation passes: {budget["max_validation_passes"]}
+- Max dynamic specialists created: {budget["max_dynamic_specialists"]}
+- Planner mode: {budget["planner_mode"]}
+
+Rules:
+- Use the minimum agent set that can reliably answer the request.
+- Every dispatched agent must reduce uncertainty, add required evidence, or produce a required artifact.
+- Prefer parallel execution only for independent tasks with distinct evidence inputs.
+- Do not create a dynamic specialist unless existing agents are demonstrably insufficient and the budget allows it.
+- Reuse prior thread/topic artifacts before dispatching new extraction work.
+"""
+
+
+def _track_budget_event(warnings: list[str], message: str) -> None:
+    if message not in warnings:
+        warnings.append(message)
+
+
 def _build_after_action_prompt(
     *,
     prompt: str,
@@ -151,6 +255,9 @@ def _build_after_action_prompt(
     dynamic_agents_created: dict,
     input_files: list[str] | None,
     observations: list[str],
+    delegation_budget: dict[str, object] | None = None,
+    agent_dispatches: list[dict] | None = None,
+    orchestration_warnings: list[str] | None = None,
 ) -> str:
     """Build the input payload for the after-action analyst."""
     response_excerpt = result_text[-4000:] if len(result_text) > 4000 else result_text
@@ -181,6 +288,15 @@ def _build_after_action_prompt(
         "## Input Files",
         "\n".join(f"- {fp}" for fp in (input_files or [])) if input_files else "None.",
         "",
+        "## Delegation Budget",
+        json.dumps(delegation_budget or {}, indent=2, sort_keys=True),
+        "",
+        "## Agent Dispatches",
+        "\n".join(f"- {entry}" for entry in (agent_dispatches or [])) if agent_dispatches else "None recorded.",
+        "",
+        "## Orchestration Warnings",
+        "\n".join(f"- {item}" for item in (orchestration_warnings or [])) if orchestration_warnings else "None.",
+        "",
         "## Observations",
         "\n".join(f"- {line}" for line in observations) if observations else "None recorded.",
     ]
@@ -195,6 +311,8 @@ def _fallback_after_action_review(
     tools_used: set[str],
     dynamic_agents_created: dict,
     observations: list[str],
+    delegation_budget: dict[str, object] | None = None,
+    orchestration_warnings: list[str] | None = None,
     failure: Exception | None = None,
 ) -> str:
     """Generate a deterministic fallback after-action review."""
@@ -213,6 +331,7 @@ def _fallback_after_action_review(
         "## Sustains",
         f"- Tool coverage used: {tools_line}",
         f"- Dynamic specialists created: {len(dynamic_agents_created)}",
+        f"- Delegation mode: {(delegation_budget or {}).get('mode', 'unknown')}",
         "",
         "## Improves",
         "- Add more explicit source-quality notes when uncertainty remains.",
@@ -239,6 +358,12 @@ def _fallback_after_action_review(
         "- Ensure verifier/critic outputs are captured explicitly in observations.",
         "- Promote repeated successful specialists only with evidence.",
     ])
+    if orchestration_warnings:
+        lines.extend([
+            "",
+            "## Speed Opportunities",
+            *[f"- {item}" for item in orchestration_warnings[:5]],
+        ])
     if failure is not None:
         lines.extend([
             "",
@@ -289,6 +414,9 @@ async def _generate_after_action_review(
     dynamic_agents_created: dict,
     input_files: list[str] | None,
     model_overrides: dict[str, str] | None,
+    delegation_budget: dict[str, object],
+    agent_dispatches: list[dict],
+    orchestration_warnings: list[str],
     runner: Callable[..., Awaitable[str]] | None = None,
 ) -> Path:
     """Generate and persist an after-action review for the completed run."""
@@ -309,6 +437,9 @@ async def _generate_after_action_review(
         dynamic_agents_created=dynamic_agents_created,
         input_files=input_files,
         observations=observations,
+        delegation_budget=delegation_budget,
+        agent_dispatches=agent_dispatches,
+        orchestration_warnings=orchestration_warnings,
     )
     runner = runner or _default_after_action_runner
     model = (model_overrides or {}).get("after-action-analyst", agent_def.model) or agent_def.model
@@ -333,6 +464,8 @@ async def _generate_after_action_review(
             tools_used=tools_used,
             dynamic_agents_created=dynamic_agents_created,
             observations=observations,
+            delegation_budget=delegation_budget,
+            orchestration_warnings=orchestration_warnings,
             failure=failure,
         )
 
@@ -376,6 +509,11 @@ async def run_research(
     """
     effective_cwd = Path(cwd) if cwd else Path.cwd()
     _run_started = datetime.now()
+    delegation_budget = _derive_delegation_budget(
+        prompt=prompt,
+        input_files=input_files,
+        thread_id=thread_id,
+    )
 
     # Inject prior thread context into system prompt
     system = SYSTEM_PROMPT
@@ -399,6 +537,7 @@ async def run_research(
     )
     if scaffold:
         system = scaffold + "\n\n" + system  # Scaffold at context START (high-accuracy zone)
+    system += _format_delegation_budget(delegation_budget)
 
     # Output directory configuration
     if output_dir:
@@ -494,6 +633,10 @@ No output directory was specified. Before creating your first artifact, ask the 
     tools_used: set[str] = set()
     scripts_written: list[str] = []
     rationale = None
+    agent_dispatches: list[dict[str, object]] = []
+    agent_dispatch_count = 0
+    validation_passes = 0
+    orchestration_warnings: list[str] = []
 
     try:
         async for message in query(prompt=prompt, options=options):
@@ -504,6 +647,36 @@ No output directory was specified. Before creating your first artifact, ask the 
                         result_text += block.text
                     elif isinstance(block, ToolUseBlock):
                         tools_used.add(block.name)
+                        if block.name == "Agent":
+                            agent_name = _extract_agent_name(block.input)
+                            if agent_name:
+                                agent_dispatch_count += 1
+                                entry = {
+                                    "name": agent_name,
+                                    "action": _AGENT_ACTIONS.get(agent_name, "working"),
+                                    "model": (model_overrides or {}).get(agent_name, _AGENT_MODELS.get(agent_name, "sonnet")),
+                                    "dispatch_index": agent_dispatch_count,
+                                }
+                                agent_dispatches.append(entry)
+                                if agent_name in ("plan-validator", "source-verifier", "report-critic"):
+                                    validation_passes += 1
+                                if agent_dispatch_count > int(delegation_budget["max_agent_dispatches"]):
+                                    _track_budget_event(
+                                        orchestration_warnings,
+                                        f"Agent dispatch budget exceeded ({agent_dispatch_count}/{delegation_budget['max_agent_dispatches']}).",
+                                    )
+                                if validation_passes > int(delegation_budget["max_validation_passes"]):
+                                    _track_budget_event(
+                                        orchestration_warnings,
+                                        f"Validation pass budget exceeded ({validation_passes}/{delegation_budget['max_validation_passes']}).",
+                                    )
+                        elif block.name == "mcp__stratagem__create_specialist":
+                            projected = len(_dynamic_agents_created) + 1
+                            if projected > int(delegation_budget["max_dynamic_specialists"]):
+                                _track_budget_event(
+                                    orchestration_warnings,
+                                    f"Dynamic specialist budget exceeded ({projected}/{delegation_budget['max_dynamic_specialists']}).",
+                                )
                         # Track scripts written to .stratagem/scripts/
                         if block.name == "Write" and isinstance(block.input, dict):
                             fp = block.input.get("file_path", "")
@@ -586,6 +759,9 @@ No output directory was specified. Before creating your first artifact, ask the 
                     dynamic_agents_created=_dynamic_agents_created,
                     input_files=input_files,
                     model_overrides=model_overrides,
+                    delegation_budget=delegation_budget,
+                    agent_dispatches=agent_dispatches,
+                    orchestration_warnings=orchestration_warnings,
                 )
             except Exception as exc:
                 after_action_path = None
@@ -605,6 +781,9 @@ No output directory was specified. Before creating your first artifact, ask the 
                 "input_files": input_files or [],
                 "output_dir": str(Path(output_dir).resolve()) if output_dir else None,
                 "memory_budget": memory_budget or 8000,
+                "delegation_budget": delegation_budget,
+                "orchestration_warnings": orchestration_warnings,
+                "agents_dispatched": agent_dispatches,
                 "tools_used": {t: 1 for t in sorted(tools_used)},
                 "total_turns": turn_count,
                 "cost_usd": cost_usd,

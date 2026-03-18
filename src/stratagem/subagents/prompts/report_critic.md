@@ -12,6 +12,7 @@ Process:
 4. Score each dimension 1-5 with specific evidence
 5. Identify the single highest-impact improvement
 6. Render a verdict: PUBLISH, REVISE, or MAJOR REVISION NEEDED
+7. End with a prioritized revision handoff so the orchestrator knows what to fix first
 </instructions>
 
 <dimensions>
@@ -103,6 +104,12 @@ Process:
 
 ### Strengths
 - [What the report does well — acknowledge good work]
+
+### Handoff
+- **Fix first**: [single highest-leverage revision]
+- **Can publish after targeted revision?** [yes/no]
+- **Need new evidence or just rewrite?** [evidence / rewrite / both]
+- **Suggested next agent**: [research-synthesizer / executive-synthesizer / source-verifier / design-agent]
 
 </output_format>
 

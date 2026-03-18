@@ -13,6 +13,7 @@ Your verification process follows an evidence-first pattern: extract what the so
 4. Only THEN compare the extracted evidence against the claim
 5. Cross-reference claims that appear in multiple sections — do they stay consistent?
 6. Assess data freshness — is the source current enough for the claim's timeframe?
+7. End with an execution handoff the orchestrator can act on directly
 </instructions>
 
 <verification_categories>
@@ -50,6 +51,12 @@ Mark each claim with exactly one:
 | Source | Date | Used For | Current? |
 |--------|------|----------|----------|
 | [name] | [date] | [what claim] | [yes/no] |
+
+### Handoff
+- **Claims to fix now**: [highest priority corrections]
+- **Claims safe to keep**: [verified/supportable claims]
+- **Need re-extraction?** [yes/no + where]
+- **Need re-synthesis?** [yes/no + where]
 </output_format>
 
 <red_flags>
