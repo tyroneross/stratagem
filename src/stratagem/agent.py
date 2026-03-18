@@ -23,6 +23,7 @@ from claude_agent_sdk import (
 
 from stratagem.server import create_stratagem_server, get_all_allowed_tools
 from stratagem.subagents.definitions import SUBAGENTS
+from stratagem.tracing import stratagem_trace, traceable, tracing_enabled, project_name
 
 # Mutable agents dict for the active run — read by create_specialist tool
 _active_run_agents: dict | None = None
@@ -399,6 +400,7 @@ async def _default_after_action_runner(
     return review_text.strip()
 
 
+@traceable(name="stratagem_after_action_review")
 async def _generate_after_action_review(
     *,
     cwd: Path,
@@ -638,168 +640,184 @@ No output directory was specified. Before creating your first artifact, ask the 
     validation_passes = 0
     orchestration_warnings: list[str] = []
 
-    try:
-        async for message in query(prompt=prompt, options=options):
-            # Collect data for thread entry
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        result_text += block.text
-                    elif isinstance(block, ToolUseBlock):
-                        tools_used.add(block.name)
-                        if block.name == "Agent":
-                            agent_name = _extract_agent_name(block.input)
-                            if agent_name:
-                                agent_dispatch_count += 1
-                                entry = {
-                                    "name": agent_name,
-                                    "action": _AGENT_ACTIONS.get(agent_name, "working"),
-                                    "model": (model_overrides or {}).get(agent_name, _AGENT_MODELS.get(agent_name, "sonnet")),
-                                    "dispatch_index": agent_dispatch_count,
-                                }
-                                agent_dispatches.append(entry)
-                                if agent_name in ("plan-validator", "source-verifier", "report-critic"):
-                                    validation_passes += 1
-                                if agent_dispatch_count > int(delegation_budget["max_agent_dispatches"]):
+    trace_metadata = {
+        "thread_id": thread_id,
+        "topic_id": topic_id,
+        "model": model or "opus",
+        "memory_budget": memory_budget or 8000,
+        "delegation_mode": delegation_budget["mode"],
+        "input_file_count": len(input_files or []),
+        "langsmith_project": project_name(),
+        "langsmith_enabled": tracing_enabled(),
+    }
+
+    with stratagem_trace(name="run_research", metadata=trace_metadata):
+        try:
+            async for message in query(prompt=prompt, options=options):
+                # Collect data for thread entry
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, TextBlock):
+                            result_text += block.text
+                        elif isinstance(block, ToolUseBlock):
+                            tools_used.add(block.name)
+                            if block.name == "Agent":
+                                agent_name = _extract_agent_name(block.input)
+                                if agent_name:
+                                    agent_dispatch_count += 1
+                                    entry = {
+                                        "name": agent_name,
+                                        "action": _AGENT_ACTIONS.get(agent_name, "working"),
+                                        "model": (model_overrides or {}).get(agent_name, _AGENT_MODELS.get(agent_name, "sonnet")),
+                                        "dispatch_index": agent_dispatch_count,
+                                    }
+                                    agent_dispatches.append(entry)
+                                    if agent_name in ("plan-validator", "source-verifier", "report-critic"):
+                                        validation_passes += 1
+                                    if agent_dispatch_count > int(delegation_budget["max_agent_dispatches"]):
+                                        _track_budget_event(
+                                            orchestration_warnings,
+                                            f"Agent dispatch budget exceeded ({agent_dispatch_count}/{delegation_budget['max_agent_dispatches']}).",
+                                        )
+                                    if validation_passes > int(delegation_budget["max_validation_passes"]):
+                                        _track_budget_event(
+                                            orchestration_warnings,
+                                            f"Validation pass budget exceeded ({validation_passes}/{delegation_budget['max_validation_passes']}).",
+                                        )
+                            elif block.name == "mcp__stratagem__create_specialist":
+                                projected = len(_dynamic_agents_created) + 1
+                                if projected > int(delegation_budget["max_dynamic_specialists"]):
                                     _track_budget_event(
                                         orchestration_warnings,
-                                        f"Agent dispatch budget exceeded ({agent_dispatch_count}/{delegation_budget['max_agent_dispatches']}).",
+                                        f"Dynamic specialist budget exceeded ({projected}/{delegation_budget['max_dynamic_specialists']}).",
                                     )
-                                if validation_passes > int(delegation_budget["max_validation_passes"]):
-                                    _track_budget_event(
-                                        orchestration_warnings,
-                                        f"Validation pass budget exceeded ({validation_passes}/{delegation_budget['max_validation_passes']}).",
-                                    )
-                        elif block.name == "mcp__stratagem__create_specialist":
-                            projected = len(_dynamic_agents_created) + 1
-                            if projected > int(delegation_budget["max_dynamic_specialists"]):
-                                _track_budget_event(
-                                    orchestration_warnings,
-                                    f"Dynamic specialist budget exceeded ({projected}/{delegation_budget['max_dynamic_specialists']}).",
-                                )
-                        # Track scripts written to .stratagem/scripts/
-                        if block.name == "Write" and isinstance(block.input, dict):
-                            fp = block.input.get("file_path", "")
-                            if ".stratagem/scripts/" in fp or "stratagem/scripts/" in fp:
-                                scripts_written.append(fp)
-            elif isinstance(message, ResultMessage):
-                turn_count = message.num_turns
-                cost_usd = message.total_cost_usd
+                            # Track scripts written to .stratagem/scripts/
+                            if block.name == "Write" and isinstance(block.input, dict):
+                                fp = block.input.get("file_path", "")
+                                if ".stratagem/scripts/" in fp or "stratagem/scripts/" in fp:
+                                    scripts_written.append(fp)
+                elif isinstance(message, ResultMessage):
+                    turn_count = message.num_turns
+                    cost_usd = message.total_cost_usd
 
-            if verbose:
-                _print_message(message)
-            yield message
-    finally:
-        # Clear active thread dir
-        import stratagem.tools.memory as _mem_mod
-        _mem_mod._active_thread_dir = None
-        _mem_mod._active_observation_index = None
+                if verbose:
+                    _print_message(message)
+                yield message
+        finally:
+            # Clear active thread dir
+            import stratagem.tools.memory as _mem_mod
+            _mem_mod._active_thread_dir = None
+            _mem_mod._active_observation_index = None
 
-        # Post-run: aggregate observations + persist dynamic agents
-        if thread_id:
-            from stratagem.memory import aggregate_observations, persist_dynamic_agents, check_promotion
-            try:
-                aggregate_observations(thread_id=thread_id, topic_id=topic_id, cwd=effective_cwd)
+            # Post-run: aggregate observations + persist dynamic agents
+            if thread_id:
+                from stratagem.memory import aggregate_observations, persist_dynamic_agents, check_promotion
+                try:
+                    aggregate_observations(thread_id=thread_id, topic_id=topic_id, cwd=effective_cwd)
 
-                # Persist any dynamic agents created during this run
-                if _dynamic_agents_created:
-                    persist_dynamic_agents(
-                        definitions=_dynamic_agents_created,
-                        topic_id=topic_id,
-                        cwd=effective_cwd,
-                    )
+                    # Persist any dynamic agents created during this run
+                    if _dynamic_agents_created:
+                        persist_dynamic_agents(
+                            definitions=_dynamic_agents_created,
+                            topic_id=topic_id,
+                            cwd=effective_cwd,
+                        )
 
-                # Check promotion criteria
-                check_promotion(cwd=effective_cwd)
-            except Exception as exc:
-                _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
+                    # Check promotion criteria
+                    check_promotion(cwd=effective_cwd)
+                except Exception as exc:
+                    _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
 
-        _active_run_agents = None
-        # Persist thread entry even if generator abandoned early
-        if thread_id and (result_text or turn_count > 0):
-            from stratagem.threads import append_entry
+            _active_run_agents = None
+            # Persist thread entry even if generator abandoned early
+            if thread_id and (result_text or turn_count > 0):
+                from stratagem.threads import append_entry
 
-            # Extract rationale block if present
-            if "## Rationale" in result_text:
-                idx = result_text.index("## Rationale")
-                rationale_block = result_text[idx + len("## Rationale"):].strip()
-                # Take up to next heading or 500 chars
-                end = rationale_block.find("\n## ")
-                if end > 0:
-                    rationale = rationale_block[:end].strip()
-                else:
-                    rationale = rationale_block[:500].strip()
+                # Extract rationale block if present
+                if "## Rationale" in result_text:
+                    idx = result_text.index("## Rationale")
+                    rationale_block = result_text[idx + len("## Rationale"):].strip()
+                    # Take up to next heading or 500 chars
+                    end = rationale_block.find("\n## ")
+                    if end > 0:
+                        rationale = rationale_block[:end].strip()
+                    else:
+                        rationale = rationale_block[:500].strip()
 
-            # Use last 500 chars as summary (the agent's final output)
-            summary = result_text[-500:] if len(result_text) > 500 else result_text
-            append_entry(
-                thread_id,
-                cwd=effective_cwd,
-                query=prompt,
-                summary=summary,
-                turns=turn_count,
-                cost=cost_usd,
-                rationale=rationale,
-                tools_used=sorted(tools_used),
-                scripts=scripts_written,
-            )
-
-            try:
-                after_action_path = await _generate_after_action_review(
+                # Use last 500 chars as summary (the agent's final output)
+                summary = result_text[-500:] if len(result_text) > 500 else result_text
+                append_entry(
+                    thread_id,
                     cwd=effective_cwd,
-                    thread_id=thread_id,
-                    topic_id=topic_id,
-                    prompt=prompt,
-                    result_text=result_text,
+                    query=prompt,
+                    summary=summary,
+                    turns=turn_count,
+                    cost=cost_usd,
                     rationale=rationale,
-                    turn_count=turn_count,
-                    cost_usd=cost_usd,
-                    tools_used=tools_used,
-                    scripts_written=scripts_written,
-                    dynamic_agents_created=_dynamic_agents_created,
-                    input_files=input_files,
-                    model_overrides=model_overrides,
-                    delegation_budget=delegation_budget,
-                    agent_dispatches=agent_dispatches,
-                    orchestration_warnings=orchestration_warnings,
+                    tools_used=sorted(tools_used),
+                    scripts=scripts_written,
                 )
-            except Exception as exc:
+
+                try:
+                    after_action_path = await _generate_after_action_review(
+                        cwd=effective_cwd,
+                        thread_id=thread_id,
+                        topic_id=topic_id,
+                        prompt=prompt,
+                        result_text=result_text,
+                        rationale=rationale,
+                        turn_count=turn_count,
+                        cost_usd=cost_usd,
+                        tools_used=tools_used,
+                        scripts_written=scripts_written,
+                        dynamic_agents_created=_dynamic_agents_created,
+                        input_files=input_files,
+                        model_overrides=model_overrides,
+                        delegation_budget=delegation_budget,
+                        agent_dispatches=agent_dispatches,
+                        orchestration_warnings=orchestration_warnings,
+                    )
+                except Exception as exc:
+                    after_action_path = None
+                    _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
+            else:
                 after_action_path = None
-                _log_memory_persistence_error(cwd=effective_cwd, thread_id=thread_id, exc=exc)
-        else:
-            after_action_path = None
 
-        # Write run_state.json
-        if thread_id:
-            run_state = {
-                "thread_id": thread_id,
-                "topic_id": topic_id,
-                "started": _run_started.isoformat() if _run_started else None,
-                "completed": datetime.now().isoformat(),
-                "model": model or "opus",
-                "model_overrides": model_overrides or {},
-                "input_files": input_files or [],
-                "output_dir": str(Path(output_dir).resolve()) if output_dir else None,
-                "memory_budget": memory_budget or 8000,
-                "delegation_budget": delegation_budget,
-                "orchestration_warnings": orchestration_warnings,
-                "agents_dispatched": agent_dispatches,
-                "tools_used": {t: 1 for t in sorted(tools_used)},
-                "total_turns": turn_count,
-                "cost_usd": cost_usd,
-                "dynamic_agents_created": list(_dynamic_agents_created.keys()),
-                "dynamic_agent_definitions": _dynamic_agents_created,
-                "after_action_report": str(after_action_path) if after_action_path else None,
-                "observations_count": 0,
-            }
-            run_state_path = effective_cwd / ".stratagem" / "threads" / thread_id / "run_state.json"
-            try:
-                run_state_path.parent.mkdir(parents=True, exist_ok=True)
-                run_state_path.write_text(json.dumps(run_state, indent=2), encoding="utf-8")
-            except OSError:
-                pass
+            # Write run_state.json
+            if thread_id:
+                run_state = {
+                    "thread_id": thread_id,
+                    "topic_id": topic_id,
+                    "started": _run_started.isoformat() if _run_started else None,
+                    "completed": datetime.now().isoformat(),
+                    "model": model or "opus",
+                    "model_overrides": model_overrides or {},
+                    "input_files": input_files or [],
+                    "output_dir": str(Path(output_dir).resolve()) if output_dir else None,
+                    "memory_budget": memory_budget or 8000,
+                    "delegation_budget": delegation_budget,
+                    "orchestration_warnings": orchestration_warnings,
+                    "agents_dispatched": agent_dispatches,
+                    "langsmith_tracing": {
+                        "enabled": tracing_enabled(),
+                        "project": project_name(),
+                    },
+                    "tools_used": {t: 1 for t in sorted(tools_used)},
+                    "total_turns": turn_count,
+                    "cost_usd": cost_usd,
+                    "dynamic_agents_created": list(_dynamic_agents_created.keys()),
+                    "dynamic_agent_definitions": _dynamic_agents_created,
+                    "after_action_report": str(after_action_path) if after_action_path else None,
+                    "observations_count": 0,
+                }
+                run_state_path = effective_cwd / ".stratagem" / "threads" / thread_id / "run_state.json"
+                try:
+                    run_state_path.parent.mkdir(parents=True, exist_ok=True)
+                    run_state_path.write_text(json.dumps(run_state, indent=2), encoding="utf-8")
+                except OSError:
+                    pass
 
-        _dynamic_agents_created = {}
+            _dynamic_agents_created = {}
 
 
 _AGENT_MODELS = {
