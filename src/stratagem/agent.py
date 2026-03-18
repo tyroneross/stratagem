@@ -12,6 +12,7 @@ os.environ.pop("CLAUDECODE", None)
 
 from claude_agent_sdk import (
     query,
+    AgentDefinition,
     ClaudeAgentOptions,
     AssistantMessage,
     ResultMessage,
@@ -154,7 +155,11 @@ async def run_research(
 
     # Inject memory scaffold
     from stratagem.memory import build_scaffold
-    scaffold = build_scaffold(topic_id=topic_id, cwd=effective_cwd)
+    scaffold = build_scaffold(
+        topic_id=topic_id,
+        cwd=effective_cwd,
+        memory_budget=memory_budget or 8000,
+    )
     if scaffold:
         system = scaffold + "\n\n" + system  # Scaffold at context START (high-accuracy zone)
 
@@ -203,7 +208,7 @@ No output directory was specified. Before creating your first artifact, ask the 
     server = create_stratagem_server()
 
     # Build mutable agents dict with model overrides applied
-    global _active_run_agents
+    global _active_run_agents, _dynamic_agents_created
     all_agents: dict[str, AgentDefinition] = {}
     for name, agent_def in SUBAGENTS.items():
         override_model = (model_overrides or {}).get(name)
@@ -218,6 +223,7 @@ No output directory was specified. Before creating your first artifact, ask the 
         else:
             all_agents[name] = agent_def
     _active_run_agents = all_agents
+    _dynamic_agents_created = {}
 
     # Load dynamic agents (tier 2 persistent, tier 1 topic-scoped)
     from stratagem.memory import load_dynamic_agents

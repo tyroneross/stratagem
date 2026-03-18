@@ -27,7 +27,25 @@ def _common_memory_path(cwd: Path) -> Path:
 
 # ── Scaffold Generation ──
 
-def build_scaffold(*, topic_id: str | None, cwd: Path) -> str:
+def _truncate_to_budget(text: str, budget: int | None) -> str:
+    """Trim scaffold text to an approximate token budget.
+
+    We use a simple 4 chars/token heuristic to avoid pulling in a tokenizer.
+    """
+    if not text or budget is None or budget <= 0:
+        return text
+
+    char_budget = budget * 4
+    if len(text) <= char_budget:
+        return text
+
+    clipped = text[: max(char_budget - 24, 0)].rstrip()
+    if not clipped:
+        return ""
+    return clipped + "\n\n[Memory scaffold truncated]"
+
+
+def build_scaffold(*, topic_id: str | None, cwd: Path, memory_budget: int | None = 8000) -> str:
     """Build the memory scaffold for injection into SYSTEM_PROMPT.
 
     Returns markdown string (~500-800 tokens) or empty string if no memory exists.
@@ -108,7 +126,8 @@ def build_scaffold(*, topic_id: str | None, cwd: Path) -> str:
     if not sections:
         return ""
 
-    return "## Research Memory\n\n" + "\n".join(sections)
+    scaffold = "## Research Memory\n\n" + "\n".join(sections)
+    return _truncate_to_budget(scaffold, memory_budget)
 
 
 # ── Post-Run Aggregation ──

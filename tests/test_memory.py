@@ -55,6 +55,30 @@ class TestScaffoldGeneration:
         assert "Common Memory" in scaffold
         assert "Process learnings: 1" in scaffold
 
+    def test_scaffold_respects_memory_budget(self, tmp_path):
+        from stratagem.memory import build_scaffold
+
+        create_topic("ai-chips", title="AI Chip Landscape", cwd=tmp_path)
+        mem_path = tmp_path / ".stratagem" / "topics" / "ai-chips" / "memory.json"
+        mem_path.parent.mkdir(parents=True, exist_ok=True)
+        mem_path.write_text(json.dumps({
+            "sources": [
+                {"content": "x" * 200, "confidence": 0.9, "tags": ["source"]},
+            ],
+            "findings": [
+                {"content": "y" * 200, "confidence": 0.9, "tags": ["finding"]},
+            ],
+            "process": [
+                {"content": "z" * 200, "confidence": 0.9, "tags": ["process"]},
+            ],
+            "run_count": 2,
+            "last_run": "2026-03-14T10:00:00",
+        }))
+
+        scaffold = build_scaffold(topic_id="ai-chips", cwd=tmp_path, memory_budget=20)
+        assert "[Memory scaffold truncated]" in scaffold
+        assert len(scaffold) <= 20 * 4 + len("\n\n[Memory scaffold truncated]")
+
 
 class TestAggregation:
     def test_aggregate_observations_to_topic(self, tmp_path):
