@@ -5,11 +5,18 @@ from pathlib import Path
 from claude_agent_sdk import AgentDefinition
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+REFERENCES_DIR = Path(__file__).parent / "references"
 
 
-def _load_prompt(name: str) -> str:
-    """Load a system prompt from the prompts directory."""
-    return (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+def _load_prompt(name: str, references: list[str] | None = None) -> str:
+    """Load a system prompt, optionally appending reference guides."""
+    prompt = (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+    if references:
+        for ref_name in references:
+            ref_path = REFERENCES_DIR / f"{ref_name}.md"
+            if ref_path.exists():
+                prompt += f"\n\n---\n\n{ref_path.read_text(encoding='utf-8')}"
+    return prompt
 
 
 # MCP tool names (namespaced under stratagem server)
@@ -18,12 +25,13 @@ _S = "mcp__stratagem__"
 SUBAGENTS: dict[str, AgentDefinition] = {
     "data-extractor": AgentDefinition(
         description="Extract and verify data from PDFs, websites, spreadsheets, and presentations. Use for structured data extraction tasks.",
-        prompt=_load_prompt("data_extractor"),
+        prompt=_load_prompt("data_extractor", ["pdf_processing", "xlsx_processing", "pptx_processing"]),
         tools=[
             f"{_S}parse_pdf",
             f"{_S}scrape_url",
             f"{_S}read_spreadsheet",
             f"{_S}read_pptx",
+            f"{_S}read_docx",
             f"{_S}extract_images",
             f"{_S}create_spreadsheet",
             "Read",
@@ -45,7 +53,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
     ),
     "executive-synthesizer": AgentDefinition(
         description="Create executive-ready research briefs with strategic framing, actionable conclusions, and confidence assessments.",
-        prompt=_load_prompt("executive_synthesizer"),
+        prompt=_load_prompt("executive_synthesizer", ["docx_processing"]),
         tools=[
             "Read",
             "Write",
@@ -54,12 +62,13 @@ SUBAGENTS: dict[str, AgentDefinition] = {
     ),
     "financial-analyst": AgentDefinition(
         description="Analyze SEC filings, earnings reports, and financial statements. Extracts metrics, identifies trends, and produces financial analysis.",
-        prompt=_load_prompt("financial_analyst"),
+        prompt=_load_prompt("financial_analyst", ["pdf_processing", "xlsx_processing"]),
         tools=[
             f"{_S}search_sec_filings",
             f"{_S}download_sec_filing",
             f"{_S}read_spreadsheet",
             f"{_S}parse_pdf",
+            f"{_S}read_docx",
             f"{_S}create_spreadsheet",
             "Read",
             "Write",
@@ -69,7 +78,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
     ),
     "flowchart-architect": AgentDefinition(
         description="Design process architectures and create flowchart visualizations as PowerPoint presentations.",
-        prompt=_load_prompt("flowchart_architect"),
+        prompt=_load_prompt("flowchart_architect", ["pptx_processing"]),
         tools=[
             f"{_S}create_pptx",
             "Read",
@@ -120,7 +129,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
     ),
     "design-agent": AgentDefinition(
         description="Design visual structure and layout for deliverables — presentations, dashboards, reports, infographics. Applies Calm Precision principles as flexible guidance. Recommends chart types, information hierarchy, and slide layouts.",
-        prompt=_load_prompt("design_agent"),
+        prompt=_load_prompt("design_agent", ["pptx_processing", "docx_processing"]),
         tools=[
             f"{_S}create_pptx",
             f"{_S}create_report",

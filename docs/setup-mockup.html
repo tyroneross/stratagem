@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stratagem Setup — UI Mockup</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #111827;
+    --surface2: #1f2937;
+    --border: #374151;
+    --text: #f9fafb;
+    --text2: #9ca3af;
+    --text3: #6b7280;
+    --accent: #14b8a6;
+    --accent-hover: #0d9488;
+    --green: #22c55e;
+    --orange: #f97316;
+    --red: #ef4444;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+
+  h1 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 48px;
+  }
+
+  .screens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 48px;
+    justify-content: center;
+    max-width: 1400px;
+  }
+
+  .screen {
+    width: 420px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .screen-label {
+    background: var(--surface2);
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .screen-body {
+    padding: 40px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 24px;
+  }
+
+  .desc {
+    font-size: 14px;
+    color: var(--text2);
+    text-align: center;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  /* Card group */
+  .card {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+
+  .card-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .card-row + .card-row {
+    border-top: 1px solid var(--border);
+  }
+
+  .card-row .icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .icon-check {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-check::after {
+    content: '✓';
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .icon-empty {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+  }
+
+  .icon-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .icon-x {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+  }
+
+  .icon-x::after { content: '✕'; }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .card-label {
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .card-status {
+    font-size: 12px;
+    color: var(--text3);
+  }
+
+  .card-status.green { color: var(--green); }
+  .card-status.orange { color: var(--orange); }
+
+  /* Progress text */
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .progress-text {
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  .small-spinner {
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* Error banner */
+  .error-banner {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    background: rgba(249, 115, 22, 0.08);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+
+  .error-banner .tri {
+    color: var(--orange);
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .error-banner p {
+    font-size: 12px;
+    color: var(--orange);
+    line-height: 1.4;
+  }
+
+  /* Buttons */
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+  }
+
+  .btn-disabled {
+    background: var(--surface2);
+    color: var(--text3);
+    cursor: default;
+  }
+
+  /* Section label */
+  .section-label {
+    width: 100%;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: left;
+    margin-bottom: 4px;
+  }
+
+  .section-desc {
+    width: 100%;
+    font-size: 12px;
+    color: var(--text2);
+    text-align: left;
+    margin-bottom: 16px;
+  }
+
+  /* Input */
+  .input-row {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .input {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  /* Ready state */
+  .big-check {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .big-check::after {
+    content: '✓';
+    color: white;
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .ready-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .ready-desc {
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 24px;
+  }
+
+  /* Disclosure */
+  .disclosure {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .disclosure-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .disclosure-trigger:hover {
+    color: var(--text2);
+  }
+
+  .disclosure-chevron {
+    font-size: 9px;
+  }
+
+  .disclosure-body {
+    margin-top: 10px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .toggle-track {
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .toggle-track.on {
+    background: var(--accent);
+  }
+
+  .toggle-thumb {
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: left 0.15s;
+  }
+
+  .toggle-track.on .toggle-thumb {
+    left: 18px;
+  }
+
+  .toggle-label {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .toggle-desc {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 2px;
+  }
+
+  /* Annotation */
+  .annotation {
+    position: relative;
+    width: 100%;
+  }
+
+  .callout {
+    position: absolute;
+    right: -12px;
+    top: 50%;
+    transform: translateX(100%) translateY(-50%);
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 10px;
+    color: var(--accent);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .callout::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 5px solid transparent;
+    border-right-color: #334155;
+  }
+</style>
+</head>
+<body>
+
+<h1>Stratagem Setup — Proposed UI (all states)</h1>
+
+<div class="screens">
+
+  <!-- Screen 1: Welcome -->
+  <div class="screen">
+    <div class="screen-label">Step 1 — Welcome</div>
+    <div class="screen-body">
+      <div class="title">Stratagem</div>
+      <div class="subtitle">AI-powered market research</div>
+
+      <p class="desc">
+        Stratagem needs to install a few things<br>
+        before it can run research.
+      </p>
+
+      <div class="disclosure">
+        <button class="disclosure-trigger">
+          <span class="disclosure-chevron">▶</span>
+          For contributors
+        </button>
+      </div>
+
+      <button class="btn btn-primary">Install</button>
+    </div>
+  </div>
+
+  <!-- Screen 2: Installing (both in progress) -->
+  <div class="screen">
+    <div class="screen-label">Step 2a — Installing</div>
+    <div class="screen-body">
+      <div class="title">Stratagem</div>
+      <div class="subtitle">AI-powered market research</div>
+
+      <div class="card">
+        <div class="card-row">
+          <div class="icon"><div class="icon-check"></div></div>
+          <span class="card-label">Package manager</span>
+          <span class="card-status green">Installed</span>
+        </div>
+        <div class="card-row">
+          <div class="icon"><div class="icon-spinner"></div></div>
+          <span class="card-label">Research engine</span>
+          <span class="card-status">Installing...</span>
+        </div>
+      </div>
+
+      <div class="progress-row">
+        <div class="small-spinner"></div>
+        <span class="progress-text">Downloading httpx...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2b: Needs uv install -->
+  <div class="screen">
+    <div class="screen-label">Step 2b — Needs package manager</div>
+    <div class="screen-body">
+      <div class="title">Stratagem</div>
+      <div class="subtitle">AI-powered market research</div>
+
+      <div class="card">
+        <div class="card-row">
+          <div class="icon"><div class="icon-empty"></div></div>
+          <span class="card-label">Package manager</span>
+          <span class="card-status orange">Not found</span>
+        </div>
+        <div class="card-row">
+          <div class="icon"><div class="icon-empty"></div></div>
+          <span class="card-label">Research engine</span>
+          <span class="card-status"></span>
+        </div>
+      </div>
+
+      <p class="desc" style="font-size: 12px; margin-bottom: 16px;">
+        Stratagem needs a package manager<br>to install research tools.
+      </p>
+
+      <button class="btn btn-primary">Install</button>
+    </div>
+  </div>
+
+  <!-- Screen 2c: Install failed -->
+  <div class="screen">
+    <div class="screen-label">Step 2c — Install failed</div>
+    <div class="screen-body">
+      <div class="title">Stratagem</div>
+      <div class="subtitle">AI-powered market research</div>
+
+      <div class="card">
+        <div class="card-row">
+          <div class="icon"><div class="icon-check"></div></div>
+          <span class="card-label">Package manager</span>
+          <span class="card-status green">Installed</span>
+        </div>
+        <div class="card-row">
+          <div class="icon"><div class="icon-x"></div></div>
+          <span class="card-label">Research engine</span>
+          <span class="card-status orange">Failed</span>
+        </div>
+      </div>
+
+      <div class="error-banner">
+        <span class="tri">⚠</span>
+        <p>Could not install the research engine. If you have the source code, expand "For contributors" and enable local source install.</p>
+      </div>
+
+      <button class="btn btn-primary">Try Again</button>
+    </div>
+  </div>
+
+  <!-- Screen 3: Choose folder -->
+  <div class="screen">
+    <div class="screen-label">Step 3 — Choose folder</div>
+    <div class="screen-body">
+      <div class="title">Stratagem</div>
+      <div class="subtitle">AI-powered market research</div>
+
+      <div class="section-label">Where should research be saved?</div>
+      <div class="section-desc">Reports, data exports, and downloaded files go here.</div>
+
+      <div class="input-row">
+        <input class="input" value="/Users/tyroneross/Documents/Stratagem" readonly>
+        <button class="icon-btn">📁</button>
+      </div>
+
+      <button class="btn btn-primary">Continue</button>
+    </div>
+  </div>
+
+  <!-- Screen 4: Ready -->
+  <div class="screen">
+    <div class="screen-label">Step 4 — Ready</div>
+    <div class="screen-body">
+      <div class="big-check"></div>
+      <div class="ready-title">Ready</div>
+      <div class="ready-desc">Stratagem is set up and ready to run.</div>
+
+      <button class="btn btn-primary">Start Researching</button>
+    </div>
+  </div>
+
+  <!-- Screen: Welcome with contributor options expanded -->
+  <div class="screen">
+    <div class="screen-label">Welcome — Contributor options expanded</div>
+    <div class="screen-body">
+      <div class="title">Stratagem</div>
+      <div class="subtitle">AI-powered market research</div>
+
+      <p class="desc">
+        Stratagem needs to install a few things<br>
+        before it can run research.
+      </p>
+
+      <div class="disclosure">
+        <button class="disclosure-trigger">
+          <span class="disclosure-chevron">▼</span>
+          For contributors
+        </button>
+        <div class="disclosure-body">
+          <div class="toggle-row">
+            <div class="toggle-track on">
+              <div class="toggle-thumb"></div>
+            </div>
+            <div>
+              <div class="toggle-label">Install from local source</div>
+              <div class="toggle-desc">Uses your local code instead of the published package</div>
+              <div style="margin-top: 12px;">
+                <div style="font-size: 11px; font-weight: 500; color: var(--text3); margin-bottom: 4px;">SOURCE FOLDER</div>
+                <div class="input-row" style="margin-bottom: 0;">
+                  <input class="input" value="/Users/tyroneross/Desktop/git-folder/stratagem" readonly style="font-size: 13px;">
+                  <button class="icon-btn">📁</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary">Install</button>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

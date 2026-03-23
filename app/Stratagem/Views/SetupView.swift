@@ -3,7 +3,7 @@ import SwiftUI
 struct SetupView: View {
     @StateObject private var setup = SetupManager()
     @EnvironmentObject private var appState: AppState
-    @State private var showDevOptions = false
+    @State private var showAdvanced = false
     @State private var showingFolderPicker = false
     @State private var showingDevFolderPicker = false
 
@@ -11,46 +11,72 @@ struct SetupView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            Group {
+            VStack(spacing: Theme.Spacing.lg) {
+                // Header
+                VStack(spacing: Theme.Spacing.xs) {
+                    Text("Stratagem")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(Theme.Color.textPrimary)
+
+                    Text("AI-powered market research")
+                        .font(Theme.Font.body)
+                        .foregroundStyle(Theme.Color.textSecondary)
+                }
+
+                // Content depends on state
                 switch setup.phase {
                 case .welcome:
-                    welcomeScreen
-                case .checking, .installingUv, .installingStratagem, .needsUv:
-                    setupScreen
+                    welcomeContent
+                case .checking, .installingUv, .needsUv, .installingStratagem:
+                    installingContent
                 case .chooseDirectory:
-                    directoryScreen
+                    folderContent
                 case .ready:
-                    readyScreen
-                case .failed(let message):
-                    failedScreen(message)
+                    readyContent
+                case .failed:
+                    failedContent
                 }
             }
-            .frame(maxWidth: 440)
+            .frame(maxWidth: 420)
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Color.background)
+        .fileImporter(
+            isPresented: $showingFolderPicker,
+            allowedContentTypes: [.folder]
+        ) { result in
+            if case .success(let url) = result {
+                setup.projectDirectory = url.path
+            }
+        }
+        .fileImporter(
+            isPresented: $showingDevFolderPicker,
+            allowedContentTypes: [.folder]
+        ) { result in
+            if case .success(let url) = result {
+                setup.devModePath = url.path
+            }
+        }
     }
 
-    // MARK: - Welcome
+    // MARK: - Welcome (before any setup)
 
-    private var welcomeScreen: some View {
-        VStack(spacing: Theme.Spacing.xl) {
-            VStack(spacing: Theme.Spacing.sm) {
-                Text("Stratagem")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(Theme.Color.textPrimary)
+    private var welcomeContent: some View {
+        VStack(spacing: Theme.Spacing.lg) {
+            Text("Stratagem needs to install a few things before it can run research.")
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.Color.textSecondary)
+                .multilineTextAlignment(.center)
 
-                Text("AI-powered market research")
-                    .font(Theme.Font.body)
-                    .foregroundStyle(Theme.Color.textSecondary)
-            }
+            // Advanced: contributor mode
+            advancedSection
 
             Button {
                 Task { await setup.startSetup() }
             } label: {
-                Text("Get Started")
+                Text("Install")
                     .font(Theme.Font.body)
                     .fontWeight(.medium)
                     .foregroundStyle(.white)
@@ -61,42 +87,24 @@ struct SetupView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .transition(.opacity)
     }
 
-    // MARK: - Setup (checking + installing)
+    // MARK: - Installing (automatic steps)
 
-    private var setupScreen: some View {
+    private var installingContent: some View {
         VStack(spacing: Theme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text("Setting Up")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Theme.Color.textPrimary)
-
-                Text("Preparing your research environment")
-                    .font(Theme.Font.body)
-                    .foregroundStyle(Theme.Color.textSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Checklist — single border around group, dividers between
+            // Progress checklist
             VStack(spacing: 0) {
-                checklistItem(
-                    title: "Package Manager",
-                    subtitle: uvSubtitle,
-                    status: setup.uvStatus,
-                    showAction: setup.phase == .needsUv
+                checkRow(
+                    label: "Package manager",
+                    status: setup.uvStatus
                 )
 
-                Divider()
-                    .background(Theme.Color.border)
+                Divider().background(Theme.Color.border)
 
-                checklistItem(
-                    title: "Research Engine",
-                    subtitle: stratagemSubtitle,
-                    status: setup.stratagemStatus,
-                    showAction: false
+                checkRow(
+                    label: "Research engine",
+                    status: setup.stratagemStatus
                 )
             }
             .background(Theme.Color.surface)
@@ -106,16 +114,12 @@ struct SetupView: View {
                     .strokeBorder(Theme.Color.border, lineWidth: 1)
             )
 
-            // Progress text
+            // Status text
             if !setup.statusText.isEmpty {
                 HStack(spacing: Theme.Spacing.sm) {
-                    if setup.phase == .installingUv || setup.phase == .installingStratagem
-                        || setup.phase == .checking
-                    {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                            .frame(width: 12, height: 12)
-                    }
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
 
                     Text(setup.statusText)
                         .font(Theme.Font.metadata)
@@ -123,27 +127,54 @@ struct SetupView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            // Error
+            if let error = setup.errorMessage {
+                errorBanner(error)
+            }
+
+            // Action: install uv if needed
+            if setup.phase == .needsUv {
+                VStack(spacing: Theme.Spacing.sm) {
+                    Text("Stratagem needs a package manager to install research tools.")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+
+                    Button {
+                        Task { await setup.installUv() }
+                    } label: {
+                        Text("Install")
+                            .font(Theme.Font.body)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Theme.Color.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .transition(.opacity)
     }
 
-    // MARK: - Directory
+    // MARK: - Choose Folder
 
-    private var directoryScreen: some View {
+    private var folderContent: some View {
         VStack(spacing: Theme.Spacing.lg) {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text("Research Folder")
-                    .font(.system(size: 20, weight: .bold))
+                Text("Where should research be saved?")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.Color.textPrimary)
 
-                Text("Where should Stratagem save research data?")
-                    .font(Theme.Font.body)
+                Text("Reports, data exports, and downloaded files go here.")
+                    .font(Theme.Font.caption)
                     .foregroundStyle(Theme.Color.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Folder path + picker
+            // Folder picker
             HStack(spacing: Theme.Spacing.sm) {
                 TextField("", text: $setup.projectDirectory)
                     .textFieldStyle(.plain)
@@ -169,78 +200,37 @@ struct SetupView: View {
                 .foregroundStyle(Theme.Color.accent)
             }
 
-            // Developer options — progressive disclosure
-            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showDevOptions.toggle()
-                    }
-                } label: {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        Image(systemName: showDevOptions ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 10, weight: .medium))
-                        Text("Developer Options")
-                            .font(Theme.Font.caption)
-                    }
-                    .foregroundStyle(Theme.Color.textMuted)
-                }
-                .buttonStyle(.plain)
-
-                if showDevOptions {
-                    devOptionsPanel
-                }
-            }
-
-            // Continue
             Button {
                 setup.completeSetup()
             } label: {
                 Text("Continue")
                     .font(Theme.Font.body)
                     .fontWeight(.medium)
-                    .foregroundStyle(canContinue ? .white : Theme.Color.textMuted)
+                    .foregroundStyle(!setup.projectDirectory.isEmpty ? .white : Theme.Color.textMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(canContinue ? Theme.Color.accent : Theme.Color.surfaceSecondary)
+                    .background(!setup.projectDirectory.isEmpty ? Theme.Color.accent : Theme.Color.surfaceSecondary)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
-            .disabled(!canContinue)
+            .disabled(setup.projectDirectory.isEmpty)
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .fileImporter(
-            isPresented: $showingFolderPicker,
-            allowedContentTypes: [.folder]
-        ) { result in
-            if case .success(let url) = result {
-                setup.projectDirectory = url.path
-            }
-        }
-        .fileImporter(
-            isPresented: $showingDevFolderPicker,
-            allowedContentTypes: [.folder]
-        ) { result in
-            if case .success(let url) = result {
-                setup.devModePath = url.path
-            }
-        }
-        .transition(.opacity)
     }
 
     // MARK: - Ready
 
-    private var readyScreen: some View {
+    private var readyContent: some View {
         VStack(spacing: Theme.Spacing.xl) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(Theme.Color.accent)
+                .foregroundStyle(.green)
 
             VStack(spacing: Theme.Spacing.xs) {
-                Text("You're All Set")
+                Text("Ready")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(Theme.Color.textPrimary)
 
-                Text("Stratagem is ready for research")
+                Text("Stratagem is set up and ready to run.")
                     .font(Theme.Font.body)
                     .foregroundStyle(Theme.Color.textSecondary)
             }
@@ -259,27 +249,14 @@ struct SetupView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .transition(.opacity)
     }
 
     // MARK: - Failed
 
-    private func failedScreen(_ message: String) -> some View {
+    private var failedContent: some View {
         VStack(spacing: Theme.Spacing.lg) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36))
-                .foregroundStyle(.orange)
-
-            VStack(spacing: Theme.Spacing.sm) {
-                Text("Setup Interrupted")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Theme.Color.textPrimary)
-
-                Text(message)
-                    .font(Theme.Font.body)
-                    .foregroundStyle(Theme.Color.textSecondary)
-                    .multilineTextAlignment(.center)
+            if let error = setup.errorMessage {
+                errorBanner(error)
             }
 
             Button {
@@ -296,136 +273,34 @@ struct SetupView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, Theme.Spacing.xl)
-        .transition(.opacity)
     }
 
-    // MARK: - Checklist Item
+    // MARK: - Components
 
-    private func checklistItem(
-        title: String,
-        subtitle: String,
-        status: CheckStatus,
-        showAction: Bool
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack(spacing: Theme.Spacing.md) {
-                statusIcon(for: status)
-                    .frame(width: 20, height: 20)
+    private func checkRow(label: String, status: CheckStatus) -> some View {
+        HStack(spacing: Theme.Spacing.md) {
+            statusIcon(for: status)
+                .frame(width: 20, height: 20)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(Theme.Font.body)
-                        .fontWeight(.medium)
-                        .foregroundStyle(Theme.Color.textPrimary)
+            Text(label)
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.Color.textPrimary)
 
-                    Text(subtitle)
-                        .font(Theme.Font.caption)
-                        .foregroundStyle(Theme.Color.textMuted)
-                }
+            Spacer()
 
-                Spacer()
-            }
-
-            // Inline install prompt for uv
-            if showAction {
-                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                    Text(
-                        "Stratagem needs this to install and manage research packages."
-                    )
-                    .font(Theme.Font.caption)
-                    .foregroundStyle(Theme.Color.textSecondary)
-                    .padding(.leading, 36)
-
-                    Button {
-                        Task { await setup.installUv() }
-                    } label: {
-                        Text("Install uv")
-                            .font(Theme.Font.body)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Theme.Color.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 36)
-                }
-            }
+            Text(statusLabel(for: status))
+                .font(Theme.Font.caption)
+                .foregroundStyle(statusColor(for: status))
         }
         .padding(Theme.Spacing.md)
     }
-
-    // MARK: - Dev Options Panel
-
-    private var devOptionsPanel: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Toggle(isOn: $setup.developmentMode) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Development Mode")
-                        .font(Theme.Font.body)
-                        .foregroundStyle(Theme.Color.textPrimary)
-
-                    Text("Install from local source with editable flag")
-                        .font(Theme.Font.metadata)
-                        .foregroundStyle(Theme.Color.textMuted)
-                }
-            }
-            .toggleStyle(.switch)
-
-            if setup.developmentMode {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text("SOURCE PATH")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.Color.textMuted)
-
-                    HStack(spacing: Theme.Spacing.sm) {
-                        TextField("", text: $setup.devModePath)
-                            .textFieldStyle(.plain)
-                            .font(Theme.Font.body)
-                            .foregroundStyle(Theme.Color.textPrimary)
-                            .padding(.horizontal, Theme.Spacing.md)
-                            .padding(.vertical, 10)
-                            .background(Theme.Color.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(Theme.Color.border, lineWidth: 1)
-                            )
-
-                        Button {
-                            showingDevFolderPicker = true
-                        } label: {
-                            Image(systemName: "folder")
-                                .font(Theme.Font.body)
-                                .frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Theme.Color.accent)
-                    }
-                }
-                .padding(.leading, Theme.Spacing.md)
-            }
-        }
-        .padding(Theme.Spacing.md)
-        .background(Theme.Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Theme.Color.border, lineWidth: 1)
-        )
-    }
-
-    // MARK: - Helpers
 
     @ViewBuilder
     private func statusIcon(for status: CheckStatus) -> some View {
         switch status {
         case .pending:
-            Image(systemName: "circle")
-                .font(.system(size: 16))
-                .foregroundStyle(Theme.Color.textMuted)
+            Circle()
+                .strokeBorder(Theme.Color.border, lineWidth: 1.5)
         case .checking, .installing:
             ProgressView()
                 .scaleEffect(0.6)
@@ -434,41 +309,126 @@ struct SetupView: View {
                 .font(.system(size: 16))
                 .foregroundStyle(.green)
         case .missing:
-            Image(systemName: "xmark.circle.fill")
+            Image(systemName: "circle")
                 .font(.system(size: 16))
                 .foregroundStyle(.orange)
         case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
+            Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 16))
                 .foregroundStyle(.red)
         }
     }
 
-    private var canContinue: Bool {
-        !setup.projectDirectory.isEmpty
-            && (!setup.developmentMode || !setup.devModePath.isEmpty)
-    }
-
-    private var uvSubtitle: String {
-        switch setup.uvStatus {
-        case .pending: return "Not checked"
+    private func statusLabel(for status: CheckStatus) -> String {
+        switch status {
+        case .pending: return ""
         case .checking: return "Checking..."
-        case .installed: return "Ready"
-        case .missing: return "Not installed"
+        case .installed: return "Installed"
+        case .missing: return "Not found"
         case .installing: return "Installing..."
         case .failed(let msg): return msg
         }
     }
 
-    private var stratagemSubtitle: String {
-        switch setup.stratagemStatus {
-        case .pending: return "Waiting"
-        case .checking: return "Checking..."
-        case .installed: return "Ready"
-        case .missing: return "Not installed"
-        case .installing:
-            return setup.statusText.isEmpty ? "Installing..." : setup.statusText
-        case .failed(let msg): return msg
+    private func statusColor(for status: CheckStatus) -> Color {
+        switch status {
+        case .installed: return .green
+        case .missing, .failed: return .orange
+        default: return Theme.Color.textMuted
+        }
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.system(size: 13))
+
+            Text(message)
+                .font(Theme.Font.caption)
+                .foregroundStyle(.orange)
+        }
+        .padding(Theme.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: - Advanced (contributor options)
+
+    private var advancedSection: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showAdvanced.toggle()
+                }
+            } label: {
+                HStack(spacing: Theme.Spacing.xs) {
+                    Image(systemName: showAdvanced ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .medium))
+                    Text("For contributors")
+                        .font(Theme.Font.caption)
+                }
+                .foregroundStyle(Theme.Color.textMuted)
+            }
+            .buttonStyle(.plain)
+
+            if showAdvanced {
+                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                    Toggle(isOn: $setup.developmentMode) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Install from local source")
+                                .font(Theme.Font.body)
+                                .foregroundStyle(Theme.Color.textPrimary)
+
+                            Text("Uses your local code instead of the published package")
+                                .font(Theme.Font.metadata)
+                                .foregroundStyle(Theme.Color.textMuted)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    if setup.developmentMode {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            Text("SOURCE FOLDER")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Theme.Color.textMuted)
+
+                            HStack(spacing: Theme.Spacing.sm) {
+                                TextField("Path to stratagem source", text: $setup.devModePath)
+                                    .textFieldStyle(.plain)
+                                    .font(Theme.Font.body)
+                                    .foregroundStyle(Theme.Color.textPrimary)
+                                    .padding(.horizontal, Theme.Spacing.md)
+                                    .padding(.vertical, 10)
+                                    .background(Theme.Color.surfaceSecondary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .strokeBorder(Theme.Color.border, lineWidth: 1)
+                                    )
+
+                                Button {
+                                    showingDevFolderPicker = true
+                                } label: {
+                                    Image(systemName: "folder")
+                                        .font(Theme.Font.body)
+                                        .frame(width: 36, height: 36)
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Theme.Color.accent)
+                            }
+                        }
+                    }
+                }
+                .padding(Theme.Spacing.md)
+                .background(Theme.Color.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Theme.Color.border, lineWidth: 1)
+                )
+            }
         }
     }
 }

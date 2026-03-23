@@ -6,6 +6,7 @@ from stratagem.tools.pdf import parse_pdf
 from stratagem.tools.web import scrape_url
 from stratagem.tools.spreadsheet import read_spreadsheet
 from stratagem.tools.presentation import read_pptx, create_pptx
+from stratagem.tools.docx import read_docx
 from stratagem.tools.images import extract_images
 from stratagem.tools.sec_edgar import search_sec_filings, download_sec_filing
 from stratagem.tools.reports import create_report
@@ -20,6 +21,7 @@ ALL_TOOLS = [
     read_spreadsheet,
     read_pptx,
     create_pptx,
+    read_docx,
     extract_images,
     search_sec_filings,
     download_sec_filing,

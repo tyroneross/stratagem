@@ -33,9 +33,26 @@ class SetupManager: ObservableObject {
     @Published var projectDirectory: String = ""
     @Published var developmentMode = false
     @Published var devModePath: String = ""
+    @Published var errorMessage: String?
 
     private var uvPath: String = ""
     private var currentProcess: Process?
+
+    /// Step 1 is complete when both uv and stratagem are installed
+    var installComplete: Bool {
+        uvStatus == .installed && stratagemStatus == .installed
+    }
+
+    /// Everything is done — ready to launch
+    var allComplete: Bool {
+        installComplete && !projectDirectory.isEmpty
+            && (!developmentMode || !devModePath.isEmpty)
+    }
+
+    /// Needs manual uv install action
+    var needsUvInstall: Bool {
+        phase == .needsUv
+    }
 
     var appSupportDir: String {
         let paths = NSSearchPathForDirectoriesInDomains(
@@ -77,8 +94,9 @@ class SetupManager: ObservableObject {
 
     func startSetup() async {
         phase = .checking
+        errorMessage = nil
         uvStatus = .checking
-        statusText = "Looking for package manager..."
+        statusText = "Looking for Python tools..."
 
         if let path = await findUv() {
             uvPath = path
@@ -93,8 +111,9 @@ class SetupManager: ObservableObject {
 
     func installUv() async {
         phase = .installingUv
+        errorMessage = nil
         uvStatus = .installing
-        statusText = "Downloading uv..."
+        statusText = "Downloading package manager..."
 
         let _ = await runCommandStreaming(
             "/bin/sh",
@@ -115,9 +134,8 @@ class SetupManager: ObservableObject {
             await checkAndInstallStratagem()
         } else {
             uvStatus = .failed("Not found after install")
-            phase = .failed(
-                "uv was downloaded but couldn't be located. Try restarting the app."
-            )
+            errorMessage = "Package manager was downloaded but couldn't be located. Try restarting the app."
+            phase = .failed("uv install failed")
         }
     }
 
@@ -131,7 +149,6 @@ class SetupManager: ObservableObject {
         )
 
         // Check if venv already has a working stratagem
-        // Use a deep import to avoid namespace package false positives
         if FileManager.default.fileExists(atPath: venvPython) {
             if await verifyStratagem() {
                 stratagemStatus = .installed
@@ -146,10 +163,11 @@ class SetupManager: ObservableObject {
 
     func installStratagem() async {
         phase = .installingStratagem
+        errorMessage = nil
         stratagemStatus = .installing
         statusText = "Creating Python environment..."
 
-        // Create venv if needed
+        // Always ensure venv exists before installing
         if !FileManager.default.fileExists(atPath: venvPython) {
             let _ = await runCommandStreaming(
                 uvPath,
@@ -158,10 +176,26 @@ class SetupManager: ObservableObject {
 
             guard FileManager.default.fileExists(atPath: venvPython) else {
                 stratagemStatus = .failed("Environment creation failed")
-                phase = .failed(
-                    "Could not create Python environment. Ensure you have internet access so uv can download Python 3.12."
-                )
+                errorMessage = "Could not create Python environment. Check your internet connection — uv needs to download Python 3.12."
+                phase = .failed("venv creation failed")
                 return
+            }
+        } else {
+            // Venv exists but might be broken — verify python binary works
+            let testResult = await runCommand(venvPython, arguments: ["--version"])
+            if testResult.isEmpty || testResult.contains("error") {
+                // Recreate broken venv
+                try? FileManager.default.removeItem(atPath: venvPath)
+                let _ = await runCommandStreaming(
+                    uvPath,
+                    arguments: ["venv", venvPath, "--python", "3.12"]
+                )
+                guard FileManager.default.fileExists(atPath: venvPython) else {
+                    stratagemStatus = .failed("Environment recreation failed")
+                    errorMessage = "Python environment was broken and could not be recreated."
+                    phase = .failed("venv recreation failed")
+                    return
+                }
             }
         }
 
@@ -170,13 +204,21 @@ class SetupManager: ObservableObject {
         // Build install args — auto-detect source tree if not in explicit dev mode
         var installArgs = ["pip", "install"]
         if developmentMode && !devModePath.isEmpty {
+            // Validate the source path exists and has pyproject.toml
+            let pyproject = (devModePath as NSString).appendingPathComponent("pyproject.toml")
+            guard FileManager.default.fileExists(atPath: pyproject) else {
+                stratagemStatus = .failed("Source folder not valid")
+                errorMessage = "No pyproject.toml found at \"\(devModePath)\". Make sure the path points to the stratagem source code folder."
+                phase = .failed("invalid dev path")
+                return
+            }
             installArgs += ["-e", devModePath]
         } else if let sourcePath = detectSourceTree() {
             // Found local source checkout — install from it
             installArgs += ["-e", sourcePath]
             devModePath = sourcePath
             developmentMode = true
-            statusText = "Installing from source..."
+            statusText = "Installing from local source..."
         } else {
             installArgs += ["stratagem"]
         }
@@ -184,17 +226,21 @@ class SetupManager: ObservableObject {
 
         let _ = await runCommandStreaming(uvPath, arguments: installArgs)
 
-        // Verify with a deep import (not just `import stratagem` which matches namespace dirs)
+        // Verify with a deep import
         statusText = "Verifying..."
         if await verifyStratagem() {
             stratagemStatus = .installed
             statusText = ""
+            errorMessage = nil
             phase = .chooseDirectory
         } else {
             stratagemStatus = .failed("Import failed after install")
-            phase = .failed(
-                "Could not load stratagem. If you have the source code, enable Developer Options on the next screen and provide the path."
-            )
+            if developmentMode {
+                errorMessage = "Installation from local source failed. Check that the source path is correct and contains valid Python code."
+            } else {
+                errorMessage = "Could not install the research engine. If you have the source code, expand \"For contributors\" and enable local source install."
+            }
+            phase = .failed("stratagem install failed")
         }
     }
 
@@ -208,7 +254,6 @@ class SetupManager: ObservableObject {
     }
 
     /// Auto-detect stratagem source tree by looking for pyproject.toml
-    /// Follows NavGator's pattern: detect context, adapt behavior
     private func detectSourceTree() -> String? {
         let home = NSHomeDirectory()
         var candidates = [
@@ -248,6 +293,10 @@ class SetupManager: ObservableObject {
     }
 
     func saveConfiguration() {
+        try? FileManager.default.createDirectory(
+            atPath: projectDirectory,
+            withIntermediateDirectories: true
+        )
         UserDefaults.standard.set(venvPython, forKey: "pythonPath")
         UserDefaults.standard.set(projectDirectory, forKey: "projectDirectory")
         UserDefaults.standard.set(developmentMode, forKey: "developmentMode")
@@ -259,6 +308,7 @@ class SetupManager: ObservableObject {
         uvStatus = .pending
         stratagemStatus = .pending
         statusText = ""
+        errorMessage = nil
         await startSetup()
     }
 
@@ -387,7 +437,6 @@ class SetupManager: ObservableObject {
             return "Resolving dependencies..."
         }
         if lower.contains("prepared") || lower.contains("downloading") {
-            // uv outputs: "Prepared lxml==5.3.1" or "Downloading httpx-0.28.0"
             let parts = line.components(separatedBy: " ")
             if parts.count >= 2 {
                 let raw = parts.last ?? parts[1]
