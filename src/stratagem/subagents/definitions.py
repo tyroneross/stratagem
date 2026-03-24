@@ -49,7 +49,7 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             "WebSearch",  # C3: needs source access for citation verification
             f"{_S}scrape_url",
         ],
-        model="opus",
+        model="sonnet",  # Synthesizes from pre-extracted data; strong prompt compensates
     ),
     "executive-synthesizer": AgentDefinition(
         description="Create executive-ready research briefs with strategic framing, actionable conclusions, and confidence assessments.",
@@ -74,11 +74,11 @@ SUBAGENTS: dict[str, AgentDefinition] = {
             "Write",
             "Bash",  # C2: needed for Python script execution (Calculation Policy)
         ],
-        model="opus",
+        model="sonnet",  # Analysis + Bash calculations; strong prompt compensates
     ),
     "flowchart-architect": AgentDefinition(
         description="Design process architectures and create flowchart visualizations as PowerPoint presentations.",
-        prompt=_load_prompt("flowchart_architect", ["pptx_processing"]),
+        prompt=_load_prompt("flowchart_architect", ["pptx_creation"]),
         tools=[
             f"{_S}create_pptx",
             "Read",

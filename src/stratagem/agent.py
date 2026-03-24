@@ -671,12 +671,14 @@ async def run_research(
         thread_id=thread_id,
     )
 
-    # Inject prior thread context into system prompt
+    # Inject prior thread context into system prompt (capped to avoid unbounded growth)
     system = SYSTEM_PROMPT
     if thread_id:
         from stratagem.threads import load_context
+        from stratagem.utils.tokens import truncate_to_tokens
         ctx = load_context(thread_id, cwd=effective_cwd)
         if ctx:
+            ctx = truncate_to_tokens(ctx, max_tokens=4000)
             system += (
                 "\n\n## Prior Research Context\n\n"
                 + ctx

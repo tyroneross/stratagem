@@ -13,6 +13,14 @@ from stratagem.tools.reports import create_report
 from stratagem.tools.spreadsheet_create import create_spreadsheet
 from stratagem.tools.specialist import create_specialist
 from stratagem.tools.memory import record_observation
+from stratagem.tools.cache import wrap_tool_with_cache
+
+# Cache read-only tools to avoid duplicate API calls for the same input
+wrap_tool_with_cache(parse_pdf)
+wrap_tool_with_cache(scrape_url)
+wrap_tool_with_cache(read_spreadsheet)
+wrap_tool_with_cache(read_pptx)
+wrap_tool_with_cache(read_docx)
 
 # All custom tools
 ALL_TOOLS = [
