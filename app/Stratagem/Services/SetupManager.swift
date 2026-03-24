@@ -358,11 +358,13 @@ class SetupManager: ObservableObject {
 
             do {
                 try process.run()
-                process.waitUntilExit()
 
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                continuation.resume(returning: output)
+                // Resume asynchronously instead of blocking with waitUntilExit()
+                process.terminationHandler = { _ in
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    let output = String(data: data, encoding: .utf8) ?? ""
+                    continuation.resume(returning: output)
+                }
             } catch {
                 continuation.resume(returning: "")
             }
@@ -383,6 +385,8 @@ class SetupManager: ObservableObject {
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
 
+            // Serial queue protects allOutput from concurrent writes
+            let outputQueue = DispatchQueue(label: "stratagem.command-output")
             var allOutput = ""
 
             // Stream stderr for progress updates
@@ -391,7 +395,7 @@ class SetupManager: ObservableObject {
                 guard !data.isEmpty,
                     let text = String(data: data, encoding: .utf8)
                 else { return }
-                allOutput += text
+                outputQueue.sync { allOutput += text }
 
                 Task { @MainActor [weak self] in
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -409,20 +413,26 @@ class SetupManager: ObservableObject {
                 guard !data.isEmpty,
                     let text = String(data: data, encoding: .utf8)
                 else { return }
-                allOutput += text
+                outputQueue.sync { allOutput += text }
             }
 
             self.currentProcess = process
 
             do {
                 try process.run()
-                process.waitUntilExit()
 
-                stderrPipe.fileHandleForReading.readabilityHandler = nil
-                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                // Resume asynchronously instead of blocking with waitUntilExit()
+                process.terminationHandler = { [weak self] _ in
+                    stderrPipe.fileHandleForReading.readabilityHandler = nil
+                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
 
-                self.currentProcess = nil
-                continuation.resume(returning: allOutput)
+                    let result = outputQueue.sync { allOutput }
+
+                    Task { @MainActor in
+                        self?.currentProcess = nil
+                    }
+                    continuation.resume(returning: result)
+                }
             } catch {
                 self.currentProcess = nil
                 continuation.resume(returning: "error: \(error.localizedDescription)")

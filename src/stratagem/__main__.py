@@ -10,8 +10,30 @@ from pathlib import Path
 # Unset the guard variable so the SDK doesn't block us.
 os.environ.pop("CLAUDECODE", None)
 
+def _load_env():
+    """Load .env from project root (for LANGSMITH_*, ANTHROPIC_API_KEY, etc.)."""
+    env_file = Path(__file__).resolve().parents[2] / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        value = value.strip()
+        # Strip matching quotes
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        os.environ.setdefault(key.strip(), value)
+
 
 def main():
+    _load_env()
+
+    # Initialize LangSmith tracing (no-op if LANGSMITH_TRACING != true)
+    from stratagem.tracing import configure_tracing
+    configure_tracing()
+
     parser = argparse.ArgumentParser(
         prog="stratagem",
         description="Strategic research agent — document processing, web scraping, and financial analysis",

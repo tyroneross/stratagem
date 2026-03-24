@@ -28,3 +28,4 @@ output/
 *.pyc
 .pytest_cache/
 .DS_Store
+Open Stratagem.app

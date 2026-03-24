@@ -1,0 +1,13 @@
+#!/bin/bash
+# Launch Stratagem UI — run from anywhere
+DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$DIR"
+
+# Load .env
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+exec .venv/bin/python -m stratagem --ui "$@"
