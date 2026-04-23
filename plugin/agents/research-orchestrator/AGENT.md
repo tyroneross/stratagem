@@ -63,6 +63,14 @@ create_report → stratagem/reports/
 - Include source citations in all outputs
 - If a source fails, note the gap and proceed with available data
 
+## Output format routing
+
+Final deliverables route to external plugins when polished rendering is needed. See `src/stratagem/frameworks/output_formats.md` for the full routing matrix.
+
+- **Polished Word docs** — hand off to the `docx-builder` skill (external plugin) after locking structure via `doc-structure` (tyrone-writing-system) or `pyramid-long-form` (pyramid-principle). For fast research artifacts, `mcp__stratagem__create_report` with `format: "docx"` is an acceptable fallback.
+- **Polished PowerPoint decks** — hand off to the `pptx-builder` skill (external plugin) after locking argument via `deck-structure` (tyrone-writing-system) or `pyramid-presentation` (pyramid-principle). For fast fallback, `mcp__stratagem__create_pptx` is acceptable.
+- **Markdown / HTML** — stay internal; use `mcp__stratagem__create_report` with the appropriate `format`.
+
 ## Artifact Verification — MANDATORY
 
 **Never claim a file was created without verifying it exists.**
