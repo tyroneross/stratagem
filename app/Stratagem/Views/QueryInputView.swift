@@ -8,26 +8,22 @@ struct QueryInputView: View {
     var body: some View {
         VStack(spacing: Theme.Spacing.sm) {
             // Query text area
-            TextEditor(text: $viewModel.query)
+            TextField("Enter your research question...", text: $viewModel.query, axis: .vertical)
+                .textFieldStyle(.plain)
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.Color.textPrimary)
-                .scrollContentBackground(.hidden)
                 .padding(Theme.Spacing.sm)
                 .frame(minHeight: 60, maxHeight: 120)
+                .lineLimit(3...6)
                 .background(Theme.Color.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Theme.Color.border, lineWidth: 1)
                 )
-                .overlay(alignment: .topLeading) {
-                    if viewModel.query.isEmpty {
-                        Text("Enter your research question...")
-                            .font(Theme.Font.body)
-                            .foregroundStyle(Theme.Color.textMuted)
-                            .padding(.horizontal, Theme.Spacing.md)
-                            .padding(.vertical, Theme.Spacing.md)
-                            .allowsHitTesting(false)
+                .onSubmit {
+                    if viewModel.canRun {
+                        onRun()
                     }
                 }
 

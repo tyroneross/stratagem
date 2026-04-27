@@ -433,7 +433,9 @@ struct SetupView: View {
     }
 }
 
-#Preview {
-    SetupView()
-        .environmentObject(AppState())
+struct SetupView_Previews: PreviewProvider {
+    static var previews: some View {
+        SetupView()
+            .environmentObject(AppState())
+    }
 }

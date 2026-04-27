@@ -1,0 +1,3 @@
+iteration	commit	metric	delta	status	description	hypothesis
+0	e5b94a2	500.0000	0.0	baseline	initial state
+1	worktree	100.0000	-400.0000	keep	Poll backend readiness every 100ms while preserving 15s timeout	The SwiftUI app reports backend readiness late because BackendManager sleeps 500ms before each health check after process launch.

@@ -7,17 +7,37 @@ Traces appear at smith.langchain.com under the configured LANGSMITH_PROJECT.
 import os
 from contextlib import contextmanager
 
-try:
-    from langsmith import traceable, tracing_context
-except ImportError:  # pragma: no cover - optional dependency
-    def traceable(*args, **kwargs):
-        def decorator(fn):
-            return fn
-        return decorator
+_LANGSMITH = None
 
-    @contextmanager
-    def tracing_context(*args, **kwargs):
-        yield
+
+def _identity_traceable(*args, **kwargs):
+    if args and callable(args[0]) and len(args) == 1 and not kwargs:
+        return args[0]
+
+    def decorator(fn):
+        return fn
+
+    return decorator
+
+
+def _load_langsmith():
+    global _LANGSMITH
+    if _LANGSMITH is not None:
+        return _LANGSMITH
+    try:
+        from langsmith import traceable as _traceable, tracing_context as _tracing_context
+        _LANGSMITH = (_traceable, _tracing_context)
+    except ImportError:  # pragma: no cover - optional dependency
+        _LANGSMITH = (_identity_traceable, None)
+    return _LANGSMITH
+
+
+def traceable(*args, **kwargs):
+    """Lazy LangSmith decorator; avoids import cost when tracing is disabled."""
+    if not tracing_enabled():
+        return _identity_traceable(*args, **kwargs)
+    _traceable, _ = _load_langsmith()
+    return _traceable(*args, **kwargs)
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -58,8 +78,17 @@ def configure_tracing() -> None:
 @contextmanager
 def stratagem_trace(*, name: str, metadata: dict | None = None):
     """Wrap a block in a LangSmith tracing context when enabled."""
+    if not tracing_enabled():
+        yield
+        return
+
+    _, tracing_context = _load_langsmith()
+    if tracing_context is None:
+        yield
+        return
+
     with tracing_context(
-        enabled=tracing_enabled(),
+        enabled=True,
         project_name=project_name(),
         metadata={"component": name, **(metadata or {})},
     ):

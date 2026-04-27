@@ -1,0 +1,15 @@
+{
+  "target": "query-routing-budget-overhead-doe",
+  "scope": "src/stratagem/agent.py,tests/test_query_routing_policy.py",
+  "metric_cmd": "PYTHONPATH=src .venv/bin/python /tmp/stratagem_budget_overhead_metric.py",
+  "guard_cmd": "PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_query_routing_policy.py tests/test_integration.py::TestOrchestrationPolicy tests/test_tracing.py tests/test_memory.py && PYTHONPATH=src .venv/bin/python -m py_compile src/stratagem/agent.py",
+  "budget": 5,
+  "direction": "lower",
+  "baseline_value": 8755.76,
+  "best_value": 4474.52,
+  "final_value": 4474.52,
+  "improvement_pct": 48.9,
+  "latest_validation": "30 routing/memory/tracing/integration guards passed",
+  "latest_metric_value": 4475.843,
+  "latest_accuracy_score": 99999.3181
+}

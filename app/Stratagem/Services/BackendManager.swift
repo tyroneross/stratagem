@@ -39,6 +39,13 @@ class BackendManager: ObservableObject {
         // Get project directory from UserDefaults
         let projectDir = UserDefaults.standard.string(forKey: "projectDirectory") ?? NSHomeDirectory()
 
+        // Ensure cwd exists — Process.run() fails silently if the directory was
+        // deleted after setup. Idempotent: no-op when the dir already exists.
+        try? FileManager.default.createDirectory(
+            atPath: projectDir,
+            withIntermediateDirectories: true
+        )
+
         // Try to find an available port, starting from 8420
         var testPort = 8420
         var foundPort = false
@@ -99,14 +106,14 @@ class BackendManager: ObservableObject {
                 }
             }
 
-            // Wait for backend to be ready
-            for _ in 0..<30 {
-                try? await Task.sleep(for: .milliseconds(500))
+            // Poll quickly so the UI flips to ready as soon as Python is listening.
+            for _ in 0..<150 {
                 if await healthCheck(port: testPort) {
                     self.isRunning = true
                     print("Backend started successfully on port \(testPort)")
                     return
                 }
+                try? await Task.sleep(for: .milliseconds(100))
             }
 
             // Timeout

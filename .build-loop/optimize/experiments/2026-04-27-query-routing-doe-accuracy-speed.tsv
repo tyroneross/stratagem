@@ -1,0 +1,13 @@
+iteration	commit	metric	delta	status	description	hypothesis
+0	e5b94a2	36666.6473	0.0000	baseline	initial state	DoE baseline across 10 query shapes: finance, current, market sizing, docs, artifacts, vague, and false positives.
+1	worktree	43333.1724	6666.5251	keep	Word-boundary artifact signal matching	Substring matching treated "briefly" as a deliverable "brief", forcing critic/planner and slowing simple explanatory queries.
+2	worktree	46874.7066	3541.5342	keep	Add finance routing signals	Finance queries using revenue, margins, cash flow, valuation, or SEC language should mark finance_bias without making every simple lookup deep.
+3	worktree	52940.7305	6066.0239	keep	Add calculation intent bias	CAGR, market sizing, funnel conversion, and forecast prompts need calculation-aware planning without relying on LLM guesswork.
+4	worktree	62856.5599	9915.8294	keep	Add web and currentness routing signals	Latest/current/pricing/market/source queries need web-aware orchestration and should not depend on default lean behavior.
+5	worktree	68570.7588	5714.1989	keep	Raise web/document routing to standard complexity	Current web questions and single-file extraction prompts need more than lean orchestration, while simple finance lookups can stay lean.
+6	worktree	74284.9755	5714.2167	keep	Expand artifact signals for dashboards and charts	Visual/dashboard deliverables should enforce artifact planning and report-critic quality gates like decks and reports.
+7	worktree	74999.1565	714.1810	keep	Add vague prompt clarification flag	Blurry prompts should carry an explicit clarification hint without escalating simple exploratory queries into deep research.
+8	worktree	77776.9470	2777.7905	keep	Escalate finance calculations to planned orchestration	CAGR and margin trend prompts need finance plus calculation planning, while single revenue lookups remain lean.
+9	worktree	99999.1786	22222.2316	keep	Surface routing hints in the system prompt	Budget flags only improve real query accuracy if the control agent sees finance/document/web/calculation/clarification hints in prompt context.
+10	worktree	99999.5321	0.3535	keep	Cache signal regex patterns	After accuracy saturated, cache routing regexes so repeated budget derivation is faster without changing behavior.
+review	worktree	99999.5127	-0.0194	keep	Tighten soft artifact signals after overfitting review	Keep 36/36 accuracy while preventing chart/report reference questions from falsely triggering artifact mode unless paired with creation intent.

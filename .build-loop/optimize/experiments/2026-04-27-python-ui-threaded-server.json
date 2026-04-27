@@ -1,0 +1,13 @@
+{
+  "target": "python-ui-threaded-server",
+  "scope": "src/stratagem/ui.py",
+  "metric_cmd": "/tmp/stratagem_metric_threaded_server.sh",
+  "guard_cmd": "python3 -m py_compile src/stratagem/ui.py && python3 /tmp/stratagem_guard_threaded_server.py",
+  "direction": "lower",
+  "baseline_value": 1.0,
+  "best_value": 0.0,
+  "iterations": 1,
+  "kept": 1,
+  "reverted": 0,
+  "archived_at": "2026-04-27T00:20:00-07:00"
+}

@@ -88,7 +88,7 @@ class TestTopicRegistry:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k test_topic`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k test_topic`
 Expected: FAIL — `ModuleNotFoundError: No module named 'stratagem.topics'` (the import will fail since topics module for this purpose doesn't exist yet)
 
 Note: `threads.py` exists but `topics.py` does not. The existing `threads.py` handles thread storage; topics are a different abstraction layer.
@@ -229,7 +229,7 @@ def get_topic_agents_path(topic_id: str, *, cwd: Path) -> Path:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k test_topic`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k test_topic`
 Expected: 4 PASS
 
 - [ ] **Step 5: Write test — link thread to topic**
@@ -262,13 +262,13 @@ Add to `tests/test_topics.py` `TestTopicRegistry` class:
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k test_topic`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k test_topic`
 Expected: 7 PASS
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/topics.py tests/test_topics.py
 git commit -m "feat: add topic registry module
 
@@ -390,7 +390,7 @@ class TestRecordObservation:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k test_observation`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k test_observation`
 Expected: FAIL — `ModuleNotFoundError`
 
 - [ ] **Step 3: Implement tools/memory.py**
@@ -547,7 +547,7 @@ async def record_observation(args: dict[str, Any]) -> dict[str, Any]:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k test_observation`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k test_observation`
 Expected: 4 PASS
 
 - [ ] **Step 5: Register in server.py**
@@ -558,13 +558,13 @@ Modify `src/stratagem/server.py`:
 
 - [ ] **Step 6: Run existing tests to confirm nothing broke**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing --skip-network`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing --skip-network`
 Expected: All existing tests pass (tool count assertion will now fail — fix in Chunk 7)
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/tools/memory.py tests/test_observation_tool.py src/stratagem/server.py
 git commit -m "feat: add record_observation MCP tool
 
@@ -647,7 +647,7 @@ class TestScaffoldGeneration:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k TestScaffold`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k TestScaffold`
 Expected: FAIL — `ModuleNotFoundError: No module named 'stratagem.memory'`
 
 - [ ] **Step 3: Implement memory.py — scaffold generation**
@@ -768,7 +768,7 @@ def build_scaffold(*, topic_id: str | None, cwd: Path) -> str:
 
 - [ ] **Step 4: Run scaffold tests to verify they pass**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k TestScaffold`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k TestScaffold`
 Expected: 3 PASS
 
 - [ ] **Step 5: Write test — post-run aggregation**
@@ -970,18 +970,18 @@ def aggregate_observations(
 
 - [ ] **Step 7: Run aggregation tests**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k TestAggregation`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k TestAggregation`
 Expected: 3 PASS
 
 - [ ] **Step 8: Run all memory tests together**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k test_memory`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k test_memory`
 Expected: 6 PASS
 
 - [ ] **Step 9: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/memory.py tests/test_memory.py
 git commit -m "feat: add memory module — scaffold generation + post-run aggregation
 
@@ -1106,7 +1106,7 @@ class TestTierPersistence:
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k TestTier`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k TestTier`
 Expected: FAIL — `ImportError: cannot import name 'persist_dynamic_agents'`
 
 - [ ] **Step 3: Implement tier persistence functions in memory.py**
@@ -1242,13 +1242,13 @@ def check_promotion(*, cwd: Path) -> list[dict]:
 
 - [ ] **Step 4: Run tier tests**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k TestTier`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k TestTier`
 Expected: 4 PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/memory.py tests/test_memory.py
 git commit -m "feat: dynamic agent tier persistence + loading
 
@@ -1470,13 +1470,13 @@ If the system prompt includes a `## Research Memory` section:
 
 - [ ] **Step 8: Run full test suite**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing --skip-network`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing --skip-network`
 Expected: Existing tests pass (test count assertions will need updating — see Chunk 7)
 
 - [ ] **Step 9: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/agent.py src/stratagem/tools/specialist.py src/stratagem/subagents/prompts/research_planner.md
 git commit -m "feat: wire memory system into run_research
 
@@ -1598,7 +1598,7 @@ Change `"Stratagem v0.1.0 — Market research agent"` to `"Stratagem v0.1.0 — 
 - [ ] **Step 8: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/__main__.py
 git commit -m "feat: add CLI flags --topic, --input, --memory-budget, --model-override
 
@@ -1978,7 +1978,7 @@ Call `loadFullConfig();` in `initDiagram()`.
 - [ ] **Step 9: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add src/stratagem/ui.py
 git commit -m "feat: add topic selector, file input, config section to web UI
 
@@ -2028,17 +2028,17 @@ So: component count 23→24, connection count stays 31, comp_files 23→24.
 
 - [ ] **Step 5: Run full test suite**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing --skip-network`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing --skip-network`
 Expected: All tests pass
 
 - [ ] **Step 6: Run topic and memory tests**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem.testing -k "test_topic or test_memory or test_observation"`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem.testing -k "test_topic or test_memory or test_observation"`
 Expected: All new tests pass (7 topic + 7 memory + 4 observation = 18 new tests)
 
 - [ ] **Step 7: Manual verification — UI launch**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem --ui`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem --ui`
 Verify:
 1. Page loads at http://localhost:8420
 2. Topic selector dropdown visible (empty initially)
@@ -2050,13 +2050,13 @@ Verify:
 
 - [ ] **Step 8: Manual verification — CLI flags**
 
-Run: `cd /Users/tyroneross/Desktop/git-folder/stratagem && uv run python -m stratagem --help`
+Run: `cd /Users/tyroneross/dev/git-folder/stratagem && uv run python -m stratagem --help`
 Verify: `--topic`, `--input`, `--memory-budget`, `--model-override` flags appear.
 
 - [ ] **Step 9: Commit**
 
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem
+cd /Users/tyroneross/dev/git-folder/stratagem
 git add tests/test_integration.py src/stratagem/navgator.py
 git commit -m "fix: update test assertions for record_observation tool
 
@@ -2068,7 +2068,7 @@ All tests pass."
 
 Verify no uncommitted changes remain:
 ```bash
-cd /Users/tyroneross/Desktop/git-folder/stratagem && git status
+cd /Users/tyroneross/dev/git-folder/stratagem && git status
 ```
 
 If clean: done. If not: stage and commit remaining changes.

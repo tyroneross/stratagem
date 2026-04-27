@@ -1,0 +1,15 @@
+{
+  "target": "python-tracing-startup-ms",
+  "scope": "src/stratagem/tracing.py",
+  "metric_cmd": "/tmp/stratagem_metric_tracing_import.sh",
+  "guard_cmd": "/tmp/stratagem_guard_tracing.sh",
+  "budget": 3,
+  "direction": "lower",
+  "baseline_commit": "e5b94a2",
+  "baseline_value": 658.048,
+  "best_value": 658.048,
+  "prompt_version": "v1",
+  "started_at": "2026-04-27T07:08:41.892063+00:00Z",
+  "iterations_kept": 0,
+  "iterations_total": 0
+}

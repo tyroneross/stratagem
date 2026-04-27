@@ -210,6 +210,7 @@ def _interactive(args):
 
 
 async def _run(args):
+    from datetime import datetime as _dt
     from stratagem.agent import run_research
 
     prompt = args.prompt if isinstance(args.prompt, str) else " ".join(args.prompt)
@@ -217,6 +218,11 @@ async def _run(args):
     output_dir = Path(args.output_dir).resolve() if getattr(args, "output_dir", None) else None
     verbose = not args.quiet
     thread_id = getattr(args, "thread", None)
+    # Auto-name a thread for one-shot CLI runs so after-action review and
+    # run_state.json persist (the after-action gate requires thread_id).
+    if not thread_id:
+        thread_id = f"cli_{_dt.now():%Y%m%d_%H%M%S}"
+        args.thread = thread_id
 
     # --fast overrides model to sonnet for orchestrator
     model = args.model

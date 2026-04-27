@@ -257,7 +257,7 @@ class SetupManager: ObservableObject {
     private func detectSourceTree() -> String? {
         let home = NSHomeDirectory()
         var candidates = [
-            (home as NSString).appendingPathComponent("Desktop/git-folder/stratagem"),
+            (home as NSString).appendingPathComponent("dev/git-folder/stratagem"),
         ]
 
         // Also check near the project directory

@@ -1,0 +1,3 @@
+iteration	commit	metric	delta	status	description	hypothesis
+0	e5b94a2	658.0480	0.0	baseline	initial state
+1	worktree	22.8330	-635.2150	keep	Lazy-load LangSmith tracing only when tracing is enabled	Normal Mac app startup pays LangSmith import cost before parsing --ui even when LANGSMITH_TRACING is disabled.

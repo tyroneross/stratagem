@@ -1,0 +1,15 @@
+{
+  "target": "mac-backend-readiness-poll-ms",
+  "scope": "app/Stratagem/Services/BackendManager.swift",
+  "metric_cmd": "/tmp/stratagem_metric_poll.sh",
+  "guard_cmd": "/tmp/stratagem_guard_input_typecheck.sh",
+  "budget": 3,
+  "direction": "lower",
+  "baseline_commit": "e5b94a2",
+  "baseline_value": 500.0,
+  "best_value": 500.0,
+  "prompt_version": "v1",
+  "started_at": "2026-04-27T07:06:59.522792+00:00Z",
+  "iterations_kept": 0,
+  "iterations_total": 0
+}

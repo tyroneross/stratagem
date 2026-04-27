@@ -9,7 +9,9 @@ Usage:
 
 import asyncio
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import re
+import subprocess
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -44,51 +46,85 @@ _UI_HTML = """<!DOCTYPE html>
 <title>Stratagem</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F3AF;</text></svg>">
 <style>
+/* Aurora Deep — dark-only design system */
 :root {
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --border: #e5e5e5;
-  --text: #1a1a1a;
-  --text-muted: #737373;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --success: #16a34a;
-  --error: #dc2626;
-  --warn: #d97706;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --mono: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0a0a0a;
-    --surface: #171717;
-    --border: #262626;
-    --text: #e5e5e5;
-    --text-muted: #a3a3a3;
-    --accent: #3b82f6;
-    --accent-hover: #60a5fa;
-    --success: #22c55e;
-    --warn: #f59e0b;
-  }
+  --bg: #060611;
+  --surface: rgba(255,255,255,0.025);
+  --surface-hover: rgba(255,255,255,0.05);
+  --glass: rgba(255,255,255,0.03);
+  --glass-solid: #0e0e1a;
+  --glass-border: rgba(255,255,255,0.06);
+  --glass-lit: rgba(255,255,255,0.09);
+
+  --primary: #f0f0f5;
+  --secondary: #9d9db5;
+  --muted: #5a5a72;
+
+  --indigo: #818cf8;
+  --indigo-glow: rgba(129,140,248,0.12);
+  --violet: #a78bfa;
+  --violet-glow: rgba(167,139,250,0.10);
+  --cyan: #22d3ee;
+  --cyan-glow: rgba(34,211,238,0.08);
+  --emerald: #34d399;
+  --rose: #fb7185;
+  --amber: #fbbf24;
+
+  /* Back-compat aliases */
+  --text: var(--primary);
+  --text-muted: var(--secondary);
+  --border: var(--glass-border);
+  --accent: var(--indigo);
+  --accent-hover: #6366f1;
+  --success: var(--emerald);
+  --error: var(--rose);
+  --warn: var(--amber);
+
+  --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: var(--font);
   background: var(--bg);
-  color: var(--text);
+  color: var(--primary);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(ellipse at 15% 30%, rgba(99,102,241,0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 75% 15%, rgba(34,211,238,0.05) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 85%, rgba(167,139,250,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 70%, rgba(251,191,36,0.02) 0%, transparent 40%);
+  animation: aurora-drift 20s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(2%, -1%, 0) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
 .header {
   padding: 16px 24px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-.header .version { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+.header h1 {
+  font-size: 18px; font-weight: 700; letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--primary), var(--indigo));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header .version { font-size: 11px; color: var(--muted); font-family: var(--mono); }
 .main {
   flex: 1;
   max-width: 860px;
@@ -104,58 +140,103 @@ body {
   width: 100%;
   min-height: 80px;
   padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-solid);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--primary);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.6;
   resize: vertical;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.input-area textarea:focus { border-color: var(--accent); }
-.input-area textarea::placeholder { color: var(--text-muted); }
+.input-area textarea:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-glow);
+}
+.input-area textarea::placeholder { color: var(--muted); }
 .controls { display: flex; align-items: center; gap: 12px; }
 .controls select {
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-solid);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--primary);
   font-size: 13px;
   font-family: var(--font);
   outline: none;
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.controls select:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-glow);
 }
 .btn {
   padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: all 0.2s ease;
   font-family: var(--font);
+  background: var(--glass);
+  color: var(--secondary);
 }
-.btn-primary { background: var(--accent); color: white; }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-stop { background: var(--error); color: white; }
-.btn-stop:hover { opacity: 0.85; }
+.btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--glass-lit);
+  color: var(--primary);
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--indigo), #6366f1);
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 12px rgba(99,102,241,0.3);
+}
+.btn-primary:hover {
+  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, var(--indigo), #6366f1);
+  border: none;
+  color: #fff;
+}
+.btn-primary:disabled {
+  background: var(--glass);
+  color: var(--muted);
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+  cursor: default;
+  transform: none;
+}
+.btn-stop {
+  background: transparent;
+  color: var(--rose);
+  border: 1px solid var(--glass-border);
+}
+.btn-stop:hover {
+  background: rgba(251,113,133,0.08);
+  border-color: var(--rose);
+  color: var(--rose);
+}
 .status {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--secondary);
   font-family: var(--mono);
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
-.status .dot.running { background: var(--accent); animation: pulse 1.5s infinite; }
-.status .dot.done { background: var(--success); }
-.status .dot.error { background: var(--error); }
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status .dot.running { background: var(--indigo); box-shadow: 0 0 8px var(--indigo-glow); animation: pulse 1.5s infinite; }
+.status .dot.done { background: var(--emerald); }
+.status .dot.error { background: var(--rose); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 /* -- Progress Panel -- */
@@ -164,9 +245,11 @@ body {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
 }
 .progress-panel.visible { display: flex; }
 .progress-bar-wrap {
@@ -177,21 +260,21 @@ body {
 .progress-bar-track {
   flex: 1;
   height: 6px;
-  background: var(--border);
+  background: var(--glass-border);
   border-radius: 3px;
   overflow: hidden;
 }
 .progress-bar-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--indigo);
   border-radius: 3px;
   width: 0%;
   transition: width 0.4s ease;
 }
-.progress-bar-fill.done { background: var(--success); }
+.progress-bar-fill.done { background: var(--emerald); }
 .progress-label {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--secondary);
   font-family: var(--mono);
   white-space: nowrap;
   min-width: 100px;
@@ -200,16 +283,18 @@ body {
 .phase-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text);
+  color: var(--primary);
 }
 
 .output-area {
   flex: 1;
   min-height: 250px;
   max-height: 500px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
   padding: 16px 20px;
   overflow-y: auto;
   font-family: var(--mono);
@@ -218,19 +303,21 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.output-area:empty::before { content: "Output will appear here..."; color: var(--text-muted); }
-.output-area .tool-use { color: var(--accent); font-weight: 500; }
-.output-area .error { color: var(--error); }
-.output-area .meta { color: var(--text-muted); font-size: 12px; }
+.output-area:empty::before { content: "Output will appear here..."; color: var(--muted); }
+.output-area .tool-use { color: var(--indigo); font-weight: 500; }
+.output-area .error { color: var(--rose); }
+.output-area .meta { color: var(--secondary); font-size: 12px; }
 
 /* -- Phase Diagram -- */
 .phase-diagram {
   display: flex;
   align-items: flex-start;
   padding: 20px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
   overflow-x: auto;
 }
 .phase-column {
@@ -246,14 +333,14 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--muted);
   padding-bottom: 8px;
 }
 .phase-arrow {
   display: flex;
   align-items: center;
   padding: 24px 6px 0;
-  color: var(--border);
+  color: var(--glass-border);
   font-size: 20px;
   user-select: none;
 }
@@ -261,106 +348,109 @@ body {
   width: 100%;
   max-width: 130px;
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-muted);
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--secondary);
   font-family: var(--mono);
   font-size: 12px;
   text-align: center;
   cursor: default;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 .phase-node:hover {
-  border-color: var(--text-muted);
-  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--glass-lit);
+  color: var(--primary);
+  transform: translateY(-1px);
 }
 .phase-node .node-label { font-weight: 500; }
 .phase-node .node-model {
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   margin-top: 2px;
-  opacity: 0.5;
+  color: var(--muted);
 }
-.phase-node.model-opus { border-left: 3px solid #7c3aed; }
-.phase-node.model-sonnet { border-left: 3px solid #0891b2; }
+.phase-node.model-opus .node-model { color: var(--violet); }
+.phase-node.model-sonnet .node-model { color: var(--cyan); }
 
 /* -- Live Node States -- */
 .phase-node.active {
-  background: var(--accent);
-  border-color: var(--accent-hover);
-  color: white;
-  border-left-color: var(--accent-hover);
+  background: var(--indigo-glow);
+  border-color: var(--indigo);
+  color: var(--primary);
   animation: pulse 1.5s ease-in-out infinite;
 }
-.phase-node.active .node-model { opacity: 0.8; color: inherit; }
+.phase-node.active .node-model { color: inherit; }
 .phase-node.completed {
-  border-color: #93c5fd;
-  color: #1d4ed8;
-  background: #dbeafe;
+  background: var(--surface);
+  border-color: var(--glass-lit);
+  color: var(--secondary);
 }
-.phase-node.completed.model-opus,
-.phase-node.completed.model-sonnet { border-left-color: #93c5fd; }
-@media (prefers-color-scheme: dark) {
-  .phase-node.completed {
-    background: #1e3a5f;
-    color: #93c5fd;
-  }
-}
-.phase-node.completed .node-model { opacity: 0.7; }
+.phase-node.completed .node-model { color: var(--muted); }
 .phase-node.dimmed { opacity: 0.25; }
 
 /* -- Agent Detail Panel -- */
 .detail-panel {
   position: fixed;
   top: 0; right: -400px; width: 400px; height: 100vh;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
+  background: rgba(6,6,17,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-left: 1px solid var(--glass-border);
   z-index: 100;
   display: flex; flex-direction: column;
   transition: right 0.25s ease;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+  box-shadow: -4px 0 24px rgba(0,0,0,0.5);
 }
 .detail-panel.open { right: 0; }
 .detail-panel-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
-.detail-panel-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.detail-panel-header h2 { font-size: 16px; font-weight: 600; margin: 0; color: var(--primary); }
 .detail-close {
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   border: none; background: none;
-  font-size: 20px; color: var(--text-muted);
-  cursor: pointer; border-radius: 4px;
+  font-size: 20px; color: var(--secondary);
+  cursor: pointer; border-radius: 6px;
+  transition: all 0.2s ease;
 }
-.detail-close:hover { background: var(--border); color: var(--text); }
+.detail-close:hover { background: var(--surface-hover); color: var(--primary); }
 .detail-panel-body { flex: 1; overflow-y: auto; padding: 20px; }
 .detail-field { margin-bottom: 16px; }
 .detail-label {
   font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px;
+  letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px;
 }
 .detail-model-select {
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-solid);
+  color: var(--primary);
   font-size: 13px;
   font-family: var(--font);
   outline: none;
   cursor: pointer;
   width: 100%;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.detail-model-select:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-glow);
 }
 .detail-prompt {
   font-family: var(--mono); font-size: 12px; line-height: 1.6;
-  white-space: pre-wrap; color: var(--text);
+  white-space: pre-wrap; color: var(--secondary);
   max-height: 400px; overflow-y: auto;
-  background: var(--bg); padding: 12px;
-  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--glass); padding: 12px;
+  border-radius: 8px; border: 1px solid var(--glass-border);
   margin: 0;
 }
 .detail-overlay {
@@ -372,19 +462,20 @@ body {
 /* -- Config Section (collapsible) -- */
 .config-toggle {
   display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--text-muted);
+  font-size: 12px; color: var(--secondary);
   cursor: pointer; user-select: none;
   padding: 4px 0;
+  transition: color 0.2s ease;
 }
-.config-toggle:hover { color: var(--text); }
+.config-toggle:hover { color: var(--primary); }
 .config-toggle .arrow { transition: transform 0.2s; font-size: 10px; }
 .config-toggle .arrow.open { transform: rotate(90deg); }
 .config-section {
   display: none;
   padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
 }
 .config-section.visible { display: flex; flex-direction: column; gap: 12px; }
 .config-row {
@@ -392,28 +483,35 @@ body {
 }
 .config-row label {
   font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-muted);
+  letter-spacing: 0.05em; color: var(--muted);
   min-width: 100px;
 }
 .config-row input, .config-row select {
   flex: 1; padding: 6px 10px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: var(--surface); color: var(--text);
+  border: 1px solid var(--glass-border); border-radius: 10px;
+  background: var(--glass-solid); color: var(--primary);
   font-size: 13px; font-family: var(--font);
   outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.config-row input:focus { border-color: var(--accent); }
+.config-row input:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-glow);
+}
 .config-save {
   align-self: flex-end;
   padding: 6px 16px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: var(--surface); color: var(--text-muted);
+  border: 1px solid var(--glass-border); border-radius: 10px;
+  background: var(--glass); color: var(--muted);
   font-size: 12px; cursor: default;
-  transition: all 0.15s;
+  transition: all 0.2s ease;
 }
 .config-save.active {
-  background: var(--accent); color: white;
-  border-color: var(--accent); cursor: pointer;
+  background: linear-gradient(135deg, var(--indigo), #6366f1);
+  color: white;
+  border-color: transparent;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(99,102,241,0.3);
 }
 
 /* -- File Input -- */
@@ -424,48 +522,203 @@ body {
 .file-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 8px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 4px;
-  font-family: var(--mono); font-size: 12px; color: var(--text);
+  background: var(--glass); border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  font-family: var(--mono); font-size: 12px; color: var(--primary);
 }
 .file-chip .remove {
-  cursor: pointer; color: var(--text-muted);
+  cursor: pointer; color: var(--secondary);
   font-size: 14px; line-height: 1;
+  transition: color 0.2s ease;
 }
-.file-chip .remove:hover { color: var(--error); }
+.file-chip .remove:hover { color: var(--rose); }
 .add-file-btn {
   padding: 4px 10px;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
-  background: none; color: var(--text-muted);
+  border: 1px dashed var(--glass-border);
+  border-radius: 6px;
+  background: none; color: var(--secondary);
   font-size: 12px; cursor: pointer;
+  transition: all 0.2s ease;
 }
-.add-file-btn:hover { border-color: var(--text-muted); color: var(--text); }
+.add-file-btn:hover { border-color: var(--glass-lit); color: var(--primary); }
 
 /* -- Topic Selector -- */
 .topic-select {
   padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--primary);
   font-size: 13px;
   font-family: var(--font);
   outline: none;
   cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.topic-select:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px var(--indigo-glow);
 }
 
 .footer {
   padding: 12px 24px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--glass-border);
   text-align: center;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--muted);
 }
 @media (max-width: 640px) {
   .main { padding: 16px; }
   .controls { flex-wrap: wrap; }
 }
+
+/* -- Critic Gate indicator -- */
+.critic-gate {
+  display: block;
+  font-size: 12px;
+  color: var(--amber);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* -- Artifacts Panel -- */
+.artifacts-panel {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+}
+.panel-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+.artifacts-list { display: flex; flex-direction: column; }
+.artifact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+}
+.artifact-row:not(:last-child) {
+  border-bottom: 1px solid var(--glass-border);
+}
+.artifact-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artifact-path {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--secondary);
+  flex: 2;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artifact-size {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: auto;
+}
+.artifact-actions {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+.artifact-link {
+  font-size: 13px;
+  color: var(--indigo);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  min-height: 24px;
+  font-family: var(--font);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.artifact-link:hover { text-decoration: underline; }
+
+/* -- After-Action -- */
+.after-action {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.after-action summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.after-action summary::-webkit-details-marker { display: none; }
+.after-action summary::before {
+  content: "\\25B6";
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.after-action[open] summary::before { transform: rotate(90deg); }
+.after-action-body {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--secondary);
+}
+.after-action-body h1,.after-action-body h2,.after-action-body h3,.after-action-body h4 {
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: var(--primary);
+}
+.after-action-body h1 { font-size: 18px; }
+.after-action-body h2 { font-size: 16px; }
+.after-action-body h3 { font-size: 14px; }
+.after-action-body h4 { font-size: 13px; }
+.after-action-body p { margin: 8px 0; }
+.after-action-body ul,.after-action-body ol { padding-left: 20px; margin: 8px 0; }
+.after-action-body li { margin: 4px 0; }
+.after-action-body code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: var(--cyan);
+}
+.after-action-body strong { font-weight: 600; }
+.after-action-body em { font-style: italic; }
 </style>
 </head>
 <body>
@@ -591,9 +844,23 @@ body {
       </div>
       <span class="progress-label" id="progressLabel">0%</span>
     </div>
+    <span class="critic-gate" id="criticGate" hidden title="This prompt produces a file artifact, so the report-critic agent is required before final answer.">Critic enforced — artifact run</span>
   </div>
 
   <div class="output-area" id="output"></div>
+
+  <div class="artifacts-panel" id="artifactsPanel" hidden>
+    <div class="panel-header">
+      <span class="panel-title">&#x1F4CE; Artifacts</span>
+      <span class="panel-count" id="artifactsCount"></span>
+    </div>
+    <div class="artifacts-list" id="artifactsList"></div>
+  </div>
+
+  <details class="after-action" id="afterAction" hidden>
+    <summary>After-Action Review</summary>
+    <div class="after-action-body" id="afterActionBody">Loading...</div>
+  </details>
 
   <div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
   <div class="detail-panel" id="detailPanel">
@@ -763,6 +1030,15 @@ function runQuery() {
       }
     } else if (data.type === 'agent_created') {
       addDynamicNode(data.name, data.display_name, data.model);
+    } else if (data.type === 'budget') {
+      var cg = document.getElementById('criticGate');
+      if (data.budget && data.budget.force_report_critic) {
+        cg.hidden = false;
+      } else {
+        cg.hidden = true;
+      }
+    } else if (data.type === 'run_state') {
+      handleRunState(data.state);
     } else if (data.type === 'done') {
       updateProgress('Complete', 100);
       completeNode('control-agent');
@@ -817,6 +1093,138 @@ function escapeHtml(text) {
 function escapeAttr(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+function formatBytes(n) {
+  if (n == null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// Minimal inline markdown -> HTML (headings, bold, italic, code spans, lists, paragraphs)
+function simpleMarkdown(md) {
+  var lines = md.split('\\n');
+  var html = '';
+  var inList = false;
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    // Headings
+    var h = line.match(/^(#{1,4})\\s+(.*)/);
+    if (h) {
+      if (inList) { html += '</ul>'; inList = false; }
+      var level = h[1].length;
+      html += '<h' + level + '>' + inlineFormat(h[2]) + '</h' + level + '>';
+      continue;
+    }
+    // List items
+    var li = line.match(/^[-*]\\s+(.*)/);
+    if (li) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += '<li>' + inlineFormat(li[1]) + '</li>';
+      continue;
+    }
+    if (inList) { html += '</ul>'; inList = false; }
+    // Blank line -> paragraph break
+    if (line.trim() === '') {
+      html += '<p></p>';
+      continue;
+    }
+    html += '<p>' + inlineFormat(line) + '</p>';
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+function inlineFormat(text) {
+  // Escape HTML first
+  var s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Code spans
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  s = s.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+  // Italic
+  s = s.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+  return s;
+}
+
+var _afterActionReportPath = null;
+var _afterActionLoaded = false;
+var _runStateThreadId = null;
+
+function handleRunState(state) {
+  // Artifacts panel
+  var artifacts = (state && state.artifacts_created) ? state.artifacts_created : [];
+  var panel = document.getElementById('artifactsPanel');
+  var list = document.getElementById('artifactsList');
+  var count = document.getElementById('artifactsCount');
+  if (artifacts.length > 0) {
+    list.innerHTML = '';
+    artifacts.forEach(function(a, idx) {
+      var name = a.path ? a.path.split('/').pop() : 'unknown';
+      var row = document.createElement('div');
+      row.className = 'artifact-row';
+      row.innerHTML =
+        '<span class="artifact-name">' + escapeHtml(name) + '</span>' +
+        '<span class="artifact-path">' + escapeHtml(a.path || '') + '</span>' +
+        '<span class="artifact-size">' + escapeHtml(formatBytes(a.size_bytes)) + '</span>' +
+        '<span class="artifact-actions">' +
+          '<button class="artifact-link" data-path="' + escapeAttr(a.path || '') + '" onclick="revealArtifact(this)">Reveal</button>' +
+          '<button class="artifact-link" data-path="' + escapeAttr(a.path || '') + '" onclick="copyArtifactPath(this)">Copy path</button>' +
+        '</span>';
+      list.appendChild(row);
+    });
+    count.textContent = artifacts.length + ' file' + (artifacts.length !== 1 ? 's' : '');
+    panel.hidden = false;
+  } else {
+    panel.hidden = true;
+  }
+
+  // After-action
+  if (state && state.after_action_report) {
+    _afterActionReportPath = state.after_action_report;
+    _runStateThreadId = state.thread_id || threadId;
+    _afterActionLoaded = false;
+    var details = document.getElementById('afterAction');
+    var body = document.getElementById('afterActionBody');
+    body.textContent = 'Loading...';
+    details.hidden = false;
+  }
+}
+
+function revealArtifact(btn) {
+  var path = btn.dataset.path;
+  fetch('/api/files/reveal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: path })
+  }).catch(function() {});
+}
+
+function copyArtifactPath(btn) {
+  navigator.clipboard.writeText(btn.dataset.path).catch(function() {});
+}
+
+// Load after-action markdown on first open
+document.addEventListener('DOMContentLoaded', function() {
+  var details = document.getElementById('afterAction');
+  details.addEventListener('toggle', function() {
+    if (details.open && !_afterActionLoaded && _afterActionReportPath) {
+      _afterActionLoaded = true;
+      fetch('/api/runs/' + encodeURIComponent(_runStateThreadId || threadId) + '/after_action')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var body = document.getElementById('afterActionBody');
+          if (d.markdown) {
+            body.innerHTML = simpleMarkdown(d.markdown);
+          } else {
+            body.textContent = 'No content available.';
+          }
+        }).catch(function() {
+          document.getElementById('afterActionBody').textContent = 'Failed to load.';
+        });
+    }
+  });
+});
 
 document.getElementById('prompt').addEventListener('keydown', function(e) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
@@ -1123,6 +1531,13 @@ class StratagemHandler(BaseHTTPRequestHandler):
         elif parsed.path.startswith("/api/agents/") and parsed.path.endswith("/prompt"):
             name = parsed.path.split("/")[3]
             self._handle_agent_prompt(name)
+        elif parsed.path.startswith("/api/runs/") and parsed.path.endswith("/after_action"):
+            parts = parsed.path.split("/")
+            # /api/runs/<thread_id>/after_action -> parts[3]
+            if len(parts) >= 5:
+                self._handle_after_action(parts[3])
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
@@ -1133,6 +1548,8 @@ class StratagemHandler(BaseHTTPRequestHandler):
             self._handle_set_model(name)
         elif parsed.path == "/api/config":
             self._handle_save_config()
+        elif parsed.path == "/api/files/reveal":
+            self._handle_reveal()
         else:
             self.send_error(404)
 
@@ -1225,6 +1642,53 @@ class StratagemHandler(BaseHTTPRequestHandler):
                 pass
         self._json_response({"model_overrides": _model_overrides, "memory_budget": 8000, "output_dir": None})
 
+    def _handle_after_action(self, thread_id: str):
+        """Return after-action markdown for a thread."""
+        _THREAD_ID_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
+        if not _THREAD_ID_RE.match(thread_id):
+            self._json_response({"error": "Invalid thread_id"}, 400)
+            return
+        md_path = Path.cwd() / ".stratagem" / "threads" / thread_id / "after_action.md"
+        if not md_path.exists():
+            self._json_response({"error": "Not found"}, 404)
+            return
+        try:
+            markdown = md_path.read_text(encoding="utf-8")
+            self._json_response({"thread_id": thread_id, "markdown": markdown})
+        except OSError:
+            self._json_response({"error": "Read error"}, 500)
+
+    def _handle_reveal(self):
+        """Reveal a file in Finder via 'open -R'."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            body = json.loads(self.rfile.read(content_length))
+        except (json.JSONDecodeError, ValueError):
+            self._json_response({"error": "Invalid JSON"}, 400)
+            return
+        path_str = body.get("path", "")
+        if not path_str:
+            self._json_response({"error": "Missing path"}, 400)
+            return
+        p = Path(path_str)
+        if not p.is_absolute():
+            self._json_response({"error": "Path must be absolute"}, 400)
+            return
+        if not p.exists():
+            self._json_response({"error": "Path does not exist"}, 400)
+            return
+        try:
+            resolved = p.resolve()
+            cwd_resolved = Path.cwd().resolve()
+            if not resolved.is_relative_to(cwd_resolved):
+                self._json_response({"error": "Path outside project directory"}, 400)
+                return
+        except Exception:
+            self._json_response({"error": "Path resolution failed"}, 400)
+            return
+        subprocess.run(["open", "-R", str(resolved)], check=False, timeout=5)
+        self._json_response({"ok": True})
+
     def _handle_save_config(self):
         content_length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(content_length))
@@ -1309,6 +1773,11 @@ class StratagemHandler(BaseHTTPRequestHandler):
 
         active_agents = set()
 
+        # D1: emit budget event before research loop
+        from stratagem.agent import _derive_delegation_budget
+        budget = _derive_delegation_budget(prompt=prompt, input_files=input_files, thread_id=thread_id)
+        send_event({"type": "budget", "budget": budget})
+
         async for message in run_research(
             prompt=prompt,
             cwd=cwd,
@@ -1360,6 +1829,15 @@ class StratagemHandler(BaseHTTPRequestHandler):
                     "duration_ms": message.duration_ms,
                     "cost": f"{message.total_cost_usd:.4f}" if message.total_cost_usd else None,
                 })
+                # D2: emit run_state after done
+                if thread_id:
+                    state_path = cwd / ".stratagem" / "threads" / thread_id / "run_state.json"
+                    if state_path.exists():
+                        try:
+                            run_state = json.loads(state_path.read_text(encoding="utf-8"))
+                            send_event({"type": "run_state", "state": run_state})
+                        except Exception:
+                            pass
 
 
 def _extract_agent_name(tool_input) -> str | None:
@@ -1381,7 +1859,8 @@ def _extract_agent_name(tool_input) -> str | None:
 def start_ui(port: int = DEFAULT_PORT):
     """Start the Stratagem web UI server."""
     _load_config()
-    server = HTTPServer(("127.0.0.1", port), StratagemHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), StratagemHandler)
+    server.daemon_threads = True
     print(f"Stratagem UI running at http://localhost:{port}")
     print("Press Ctrl+C to stop")
     try:

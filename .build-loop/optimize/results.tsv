@@ -1,0 +1,7 @@
+iteration	commit	metric	delta	status	description	hypothesis
+0	e5b94a2	8755.7600	0.0000	baseline	initial state	Routing accuracy is saturated; reduce prompt characters and routing overhead while preserving DoE behavior and semantic hint guards.
+1	worktree	5154.0500	-3601.7100	keep	Compact orchestration budget prompt	The previous budget block repeated long prose for every query; concise fields and hints preserve behavior while reducing prompt characters.
+2	worktree	5104.2400	-49.8100	keep	Remove incidental budget blank lines	Formatting-only reduction trims repeated prompt whitespace while preserving routing hints and all budget fields.
+3	worktree	4873.7800	-230.4600	keep	Compact static routing rules	Shorter rules preserve the same operating constraints while reducing repeated prompt payload per query.
+4	worktree	4711.1600	-162.6200	keep	Shorten routing hints and artifact rule	Concise hint labels keep key operating words while trimming repeated budget prompt text.
+5	worktree	4474.5200	-236.6400	keep	Skip non-lean-only rule for lean queries	Lean queries do not need dynamic-specialist/parallelism guidance repeated, so omit it while preserving core dispatch and reuse rules.

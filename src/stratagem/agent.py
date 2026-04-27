@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from claude_agent_sdk import (
     ResultMessage,
     TextBlock,
     ToolUseBlock,
+    ToolResultBlock,
+    UserMessage,
 )
 
 from stratagem.server import create_stratagem_server, get_all_allowed_tools
@@ -109,6 +112,140 @@ Save to the output directory (see Output Location). Pyramid structure mandatory.
 """
 
 
+_HARD_ARTIFACT_SIGNALS = (
+    "powerpoint",
+    "pptx",
+    "deck",
+    "slides",
+    "presentation",
+    "docx",
+    "word doc",
+    "spreadsheet",
+    "xlsx",
+    "excel",
+    "write-up",
+    "writeup",
+    "one-pager",
+    "deliverable",
+)
+
+_SOFT_ARTIFACT_SIGNALS = (
+    "report",
+    "memo",
+    "brief",
+    "dashboard",
+    "chart",
+    "charts",
+    "visualization",
+    "visualisation",
+    "briefing",
+)
+
+_ARTIFACT_ACTION_SIGNALS = (
+    "create",
+    "draft",
+    "write",
+    "build",
+    "make",
+    "generate",
+    "produce",
+    "prepare",
+    "design",
+)
+
+_FINANCE_SIGNALS = (
+    "financial",
+    "finance",
+    "earnings",
+    "revenue",
+    "margin",
+    "gross margin",
+    "operating margin",
+    "cash flow",
+    "free cash flow",
+    "fcf",
+    "10-k",
+    "10q",
+    "10-q",
+    "sec",
+    "valuation",
+    "ebitda",
+    "guidance",
+)
+
+_CALCULATION_SIGNALS = (
+    "calculate",
+    "calculation",
+    "cagr",
+    "growth rate",
+    "yoy",
+    "year over year",
+    "margin trend",
+    "trend",
+    "market size",
+    "size the",
+    "tam",
+    "sam",
+    "som",
+    "conversion",
+    "funnel",
+    "forecast",
+)
+
+_WEB_SIGNALS = (
+    "latest",
+    "current",
+    "recent",
+    "today",
+    "this week",
+    "this month",
+    "2026",
+    "news",
+    "changed",
+    "pricing",
+    "market",
+    "landscape",
+    "competitors",
+    "sources",
+    "sec filings",
+)
+
+_DOCUMENT_SIGNALS = (
+    "pdf",
+    "spreadsheet",
+    "ppt",
+    "document",
+    "docx",
+    "xlsx",
+    "extract",
+    "input file",
+    "attachment",
+)
+
+_VAGUE_SIGNALS = (
+    "help me think through",
+    "this idea",
+    "not sure",
+    "unsure",
+    "figure out",
+    "brainstorm",
+    "what should i do",
+)
+
+_SIGNAL_PATTERN_CACHE: dict[tuple[str, ...], re.Pattern[str]] = {}
+
+
+def _contains_signal(text: str, signals: tuple[str, ...]) -> bool:
+    """Match routing signals on word boundaries to avoid substring false positives."""
+    pattern = _SIGNAL_PATTERN_CACHE.get(signals)
+    if pattern is None:
+        pattern = re.compile(
+            "|".join(r"(?<![a-z0-9])" + re.escape(signal) + r"(?![a-z0-9])" for signal in signals)
+        )
+        _SIGNAL_PATTERN_CACHE[signals] = pattern
+    return bool(pattern.search(text))
+
+
 def _log_memory_persistence_error(*, cwd: Path, thread_id: str | None, exc: Exception) -> None:
     """Record non-fatal memory persistence failures for later debugging."""
     log_dir = cwd / ".stratagem" / "logs"
@@ -169,6 +306,10 @@ def _derive_delegation_budget(
         "technology",
         "multi",
     )
+    produces_artifact = _contains_signal(text, _HARD_ARTIFACT_SIGNALS) or (
+        _contains_signal(text, _ARTIFACT_ACTION_SIGNALS)
+        and _contains_signal(text, _SOFT_ARTIFACT_SIGNALS)
+    )
     if any(token in text for token in complex_signals):
         complexity += 2
     if len(prompt) > 400:
@@ -177,6 +318,23 @@ def _derive_delegation_budget(
         complexity += 1
     if thread_id:
         complexity += 1
+    finance_bias = _contains_signal(text, _FINANCE_SIGNALS)
+    calculation_bias = _contains_signal(text, _CALCULATION_SIGNALS)
+    if calculation_bias:
+        complexity += 1
+    if finance_bias and calculation_bias:
+        complexity += 1
+    web_bias = _contains_signal(text, _WEB_SIGNALS)
+    if web_bias:
+        complexity += 2
+    document_bias = bool(input_files) or _contains_signal(text, _DOCUMENT_SIGNALS)
+    if document_bias:
+        complexity += 2
+    needs_clarification = _contains_signal(text, _VAGUE_SIGNALS)
+    # Artifact-producing runs need real validation — bump complexity so we don't
+    # land in lean mode where the planner/critic can be skipped.
+    if produces_artifact:
+        complexity += 2
 
     if complexity >= 4:
         mode = "deep"
@@ -209,32 +367,58 @@ def _derive_delegation_budget(
             "planner_mode": "skip-if-simple",
         }
 
-    budget["finance_bias"] = any(token in text for token in ("financial", "earnings", "10-k", "10q", "sec"))
-    budget["document_bias"] = bool(input_files) or any(token in text for token in ("pdf", "spreadsheet", "ppt", "document"))
+    budget["finance_bias"] = finance_bias
+    budget["calculation_bias"] = calculation_bias
+    budget["web_bias"] = web_bias
+    budget["needs_clarification"] = needs_clarification
+    budget["document_bias"] = document_bias
     budget["thread_context_available"] = bool(thread_id)
+    budget["produces_artifact"] = produces_artifact
+    if produces_artifact:
+        # Force planner + critic for any run that emits a deliverable file.
+        budget["planner_mode"] = "required"
+        budget["force_report_critic"] = True
+        # Artifact runs need at least one critic pass; raise the validation cap if too tight.
+        if int(budget["max_validation_passes"]) < 1:
+            budget["max_validation_passes"] = 1
+    else:
+        budget["force_report_critic"] = False
     return budget
 
 
 def _format_delegation_budget(budget: dict[str, object]) -> str:
     """Render delegation policy for the system prompt."""
-    return f"""
-
-## Orchestration Budget
-
-Mode: `{budget["mode"]}`
-- Max agent dispatches: {budget["max_agent_dispatches"]}
-- Max parallel tasks in a phase: {budget["max_parallel_tasks"]}
-- Max validation passes: {budget["max_validation_passes"]}
-- Max dynamic specialists created: {budget["max_dynamic_specialists"]}
-- Planner mode: {budget["planner_mode"]}
-
-Rules:
-- Use the minimum agent set that can reliably answer the request.
-- Every dispatched agent must reduce uncertainty, add required evidence, or produce a required artifact.
-- Prefer parallel execution only for independent tasks with distinct evidence inputs.
-- Do not create a dynamic specialist unless existing agents are demonstrably insufficient and the budget allows it.
-- Reuse prior thread/topic artifacts before dispatching new extraction work.
-"""
+    artifact_rules = ""
+    if budget.get("produces_artifact"):
+        artifact_rules = (
+            "\nArtifact: dispatch `report-critic`; verify path with Glob/ls; report absolute path + size."
+        )
+    routing_hints = []
+    if budget.get("finance_bias"):
+        routing_hints.append("Finance: financial-analyst for SEC/statements/calcs.")
+    if budget.get("document_bias"):
+        routing_hints.append("Docs: data-extractor before synthesis.")
+    if budget.get("web_bias"):
+        routing_hints.append("Current: WebSearch/WebFetch + freshness dates.")
+    if budget.get("calculation_bias"):
+        routing_hints.append("Calc: Python math before reporting numbers.")
+    if budget.get("needs_clarification"):
+        routing_hints.append("Ambiguous: ask clarification if scope is underspecified.")
+    lines = [
+        "## Orchestration Budget",
+        f"Mode=`{budget['mode']}`; dispatches<={budget['max_agent_dispatches']}; parallel<={budget['max_parallel_tasks']}; validations<={budget['max_validation_passes']}; dynamic<={budget['max_dynamic_specialists']}; planner={budget['planner_mode']}; critic={budget.get('force_report_critic', False)}",
+    ]
+    if routing_hints:
+        lines.append("Routing hints:")
+        lines.extend(f"- {hint}" for hint in routing_hints)
+    lines.extend([
+        "Rules:",
+        "- Minimum reliable agents; each dispatch reduces uncertainty, adds evidence, or creates required artifact.",
+    ])
+    if budget["mode"] != "lean":
+        lines.append("- Parallelize only independent inputs; dynamic specialists only for real gaps.")
+    lines.append(f"- Reuse prior thread/topic artifacts before new extraction.{artifact_rules}")
+    return "\n".join(lines)
 
 
 def _track_budget_event(warnings: list[str], message: str) -> None:
@@ -266,6 +450,95 @@ def _extract_handoff_artifacts(result_text: str) -> dict[str, str]:
         if value:
             sections[key.lower().replace(" ", "_")] = value
     return sections
+
+
+_ARTIFACT_TOOL_NAMES = {
+    "mcp__stratagem__create_pptx",
+    "mcp__stratagem__create_report",
+    "mcp__stratagem__create_spreadsheet",
+}
+
+_ARTIFACT_EXTENSIONS = (".pptx", ".docx", ".xlsx", ".csv", ".md", ".html", ".pdf")
+
+
+def _result_block_text(block: ToolResultBlock) -> str:
+    """Extract plain text from a ToolResultBlock content payload."""
+    content = block.content
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            text = item.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(parts)
+
+
+def _extract_artifact_record(
+    *,
+    tool_name: str,
+    result_text: str,
+    is_error: bool | None,
+    cwd: Path,
+) -> dict[str, object] | None:
+    """Pull (path, size_bytes) from a successful artifact-tool result."""
+    if is_error or not result_text:
+        return None
+
+    import re
+
+    candidates: list[str] = []
+    # Match absolute path until whitespace or paren — known artifact extensions
+    path_pattern = re.compile(r"(/[^\s'\"]+?\.(?:pptx|docx|xlsx|csv|md|html|pdf))(?=\b|\s|[\)\.,;:])", re.IGNORECASE)
+    for match in path_pattern.finditer(result_text):
+        candidates.append(match.group(1))
+
+    if not candidates:
+        return None
+
+    # Prefer the last path mentioned (tools tend to phrase: "Saved: /abs/path (N bytes)")
+    path_str = candidates[-1]
+    artifact_path = Path(path_str)
+    if not artifact_path.is_absolute():
+        artifact_path = (cwd / artifact_path).resolve()
+
+    size_bytes: int | None = None
+    if artifact_path.exists():
+        try:
+            size_bytes = artifact_path.stat().st_size
+        except OSError:
+            size_bytes = None
+
+    return {
+        "path": str(artifact_path),
+        "size_bytes": size_bytes,
+        "tool": tool_name.replace("mcp__stratagem__", ""),
+        "exists": artifact_path.exists(),
+    }
+
+
+def _format_artifacts_footer(artifacts: list[dict[str, object]]) -> str:
+    """Build a deterministic '📎 Artifacts Created' section."""
+    if not artifacts:
+        return ""
+    lines = ["", "## 📎 Artifacts Created", ""]
+    seen: set[str] = set()
+    for art in artifacts:
+        path = str(art.get("path") or "")
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        size = art.get("size_bytes")
+        size_str = f"{size:,} bytes" if isinstance(size, int) else "size unknown"
+        marker = "" if art.get("exists") else " ⚠️ NOT FOUND"
+        tool = art.get("tool") or "unknown"
+        lines.append(f"- `{path}` — {size_str} (via `{tool}`){marker}")
+    if len(lines) == 3:
+        return ""
+    return "\n".join(lines) + "\n"
 
 
 def _detect_orchestration_antipatterns(
@@ -795,6 +1068,8 @@ No output directory was specified. Before creating your first artifact, ask the 
     agent_dispatch_count = 0
     validation_passes = 0
     orchestration_warnings: list[str] = []
+    artifacts_created: list[dict[str, object]] = []
+    _tool_use_to_name: dict[str, str] = {}
 
     trace_metadata = {
         "thread_id": thread_id,
@@ -817,6 +1092,8 @@ No output directory was specified. Before creating your first artifact, ask the 
                             result_text += block.text
                         elif isinstance(block, ToolUseBlock):
                             tools_used.add(block.name)
+                            if block.name in _ARTIFACT_TOOL_NAMES or block.name == "Write":
+                                _tool_use_to_name[block.id] = block.name
                             if block.name == "Agent":
                                 agent_name = _extract_agent_name(block.input)
                                 if agent_name:
@@ -852,6 +1129,21 @@ No output directory was specified. Before creating your first artifact, ask the 
                                 fp = block.input.get("file_path", "")
                                 if ".stratagem/scripts/" in fp or "stratagem/scripts/" in fp:
                                     scripts_written.append(fp)
+                elif isinstance(message, UserMessage):
+                    for block in (message.content or []):
+                        if isinstance(block, ToolResultBlock):
+                            tool_name = _tool_use_to_name.get(block.tool_use_id)
+                            if not tool_name:
+                                continue
+                            if tool_name in _ARTIFACT_TOOL_NAMES or tool_name == "Write":
+                                record = _extract_artifact_record(
+                                    tool_name=tool_name,
+                                    result_text=_result_block_text(block),
+                                    is_error=block.is_error,
+                                    cwd=effective_cwd,
+                                )
+                                if record:
+                                    artifacts_created.append(record)
                 elif isinstance(message, ResultMessage):
                     turn_count = message.num_turns
                     cost_usd = message.total_cost_usd
@@ -866,6 +1158,17 @@ No output directory was specified. Before creating your first artifact, ask the 
                 orchestration_warnings=orchestration_warnings,
             )
             handoff_artifacts = _extract_handoff_artifacts(result_text)
+
+            # Append a deterministic artifacts footer if the agent didn't already
+            # surface every produced file. Always-on for any run that created files.
+            if artifacts_created and "## 📎 Artifacts Created" not in result_text:
+                footer = _format_artifacts_footer(artifacts_created)
+                if footer:
+                    if not result_text.endswith("\n"):
+                        result_text += "\n"
+                    result_text += footer
+                    if verbose:
+                        print(f"\n{footer}", flush=True)
 
             # Clear active thread dir
             import stratagem.tools.memory as _mem_mod
@@ -1025,6 +1328,7 @@ No output directory was specified. Before creating your first artifact, ask the 
                     "dynamic_agents_created": list(_dynamic_agents_created.keys()),
                     "dynamic_agent_definitions": _dynamic_agents_created,
                     "after_action_report": str(after_action_path) if after_action_path else None,
+                    "artifacts_created": artifacts_created,
                     "observations_count": 0,
                 }
                 run_state_path = effective_cwd / ".stratagem" / "threads" / thread_id / "run_state.json"

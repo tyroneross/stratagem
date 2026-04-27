@@ -195,14 +195,30 @@ class TestOrchestrationPolicy:
         from stratagem.agent import _derive_delegation_budget
 
         budget = _derive_delegation_budget(
-            prompt="Summarize this PDF into a short brief.",
-            input_files=["/tmp/report.pdf"],
+            prompt="What was Arista's Q1 2025 revenue?",
+            input_files=None,
             thread_id=None,
         )
 
         assert budget["mode"] == "lean"
         assert budget["max_agent_dispatches"] == 3
         assert budget["max_dynamic_specialists"] == 0
+        assert budget["produces_artifact"] is False
+        assert budget["force_report_critic"] is False
+
+    def test_delegation_budget_forces_critic_for_artifact_runs(self):
+        from stratagem.agent import _derive_delegation_budget
+
+        budget = _derive_delegation_budget(
+            prompt="Draft a short powerpoint on a competitive analysis of Arista and Juniper.",
+            input_files=None,
+            thread_id=None,
+        )
+
+        assert budget["produces_artifact"] is True
+        assert budget["force_report_critic"] is True
+        assert budget["planner_mode"] == "required"
+        assert budget["max_validation_passes"] >= 1
 
     def test_delegation_budget_expands_for_complex_tasks(self):
         from stratagem.agent import _derive_delegation_budget
