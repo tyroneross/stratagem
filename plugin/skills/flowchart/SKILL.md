@@ -1,6 +1,6 @@
 ---
 name: flowchart
-description: Design process architectures and generate flowchart visualizations as PowerPoint presentations
+description: Use when user asks to create a flowchart, visualize a process, map a workflow, or diagram system architecture — outputs PowerPoint presentation.
 trigger: When the user asks to create a flowchart, visualize a process, map a workflow, design a system architecture, model a business, or diagram relationships between components
 ---
 

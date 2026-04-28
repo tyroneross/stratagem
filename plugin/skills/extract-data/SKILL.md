@@ -1,6 +1,6 @@
 ---
 name: extract-data
-description: Extract structured data from documents, PDFs, spreadsheets, websites, and presentations
+description: Use when user asks to extract or parse data from PDFs, spreadsheets, presentations, documents, or URLs into structured form.
 trigger: When the user asks to extract, parse, or pull data from specific files or URLs
 ---
 

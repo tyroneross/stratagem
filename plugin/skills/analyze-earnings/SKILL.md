@@ -1,6 +1,6 @@
 ---
 name: analyze-earnings
-description: Analyze company earnings by fetching SEC filings, extracting financial metrics, and producing financial analysis
+description: Use when user asks about earnings, SEC filings, revenue, margins, or company financial performance — fetches filings and extracts financial metrics.
 trigger: When the user asks about earnings, financial results, revenue trends, margins, or specific company financial performance
 ---
 

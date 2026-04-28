@@ -1,7 +1,7 @@
 {
   "name": "stratagem",
   "version": "0.1.0",
-  "description": "Market research agent with document processing, web scraping, SEC filings, and financial analysis",
+  "description": "Market research agent — documents, web scraping, SEC filings, financial analysis",
   "commands": ["commands/stratagem.md"],
   "skills": [
     "skills/research",

@@ -1,6 +1,6 @@
 ---
 name: research
-description: Conduct market research by gathering, analyzing, and synthesizing data from multiple sources into executive-ready reports
+description: Use when user asks to research, investigate, or evaluate a market, company, industry trend, or competitive landscape — multi-source analysis into executive-ready reports.
 trigger: When the user asks to research a market, company, industry trend, competitive landscape, or any topic requiring multi-source analysis
 ---
 
