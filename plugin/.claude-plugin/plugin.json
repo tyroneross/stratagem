@@ -9,5 +9,6 @@
     "skills/extract-data",
     "skills/flowchart"
   ],
-  "agents": ["agents/research-orchestrator"]
+  "agents": ["agents/research-orchestrator"],
+  "license": "Apache-2.0"
 }

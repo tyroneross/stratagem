@@ -17,5 +17,6 @@
       "Read",
       "Write"
     ]
-  }
+  },
+  "license": "Apache-2.0"
 }
