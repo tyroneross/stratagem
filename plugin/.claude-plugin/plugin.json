@@ -2,13 +2,17 @@
   "name": "stratagem",
   "version": "0.1.0",
   "description": "Market research agent — documents, web scraping, SEC filings, financial analysis",
-  "commands": ["commands/stratagem.md"],
+  "commands": [
+    "commands/stratagem.md"
+  ],
   "skills": [
     "skills/research",
     "skills/analyze-earnings",
     "skills/extract-data",
     "skills/flowchart"
   ],
-  "agents": ["agents/research-orchestrator"],
+  "agents": [
+    "agents/research-orchestrator"
+  ],
   "license": "Apache-2.0"
 }

@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "session_id": "37adeaa8-7c81-4a40-9f58-f02f7538f8eb",
+  "compaction_count": 1,
+  "current_threshold": 0.3,
+  "last_snapshot_time": 1777271921295,
+  "last_event_time": 1777272833703,
+  "snapshot_interval_minutes": 20,
+  "session_history": []
+}

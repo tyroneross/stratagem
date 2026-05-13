@@ -1,0 +1,69 @@
+{
+  "snapshot_id": "SNAP_20260423_170332",
+  "timestamp": 1776989012142,
+  "session_id": "d8c016e8-19fc-4b44-b3f8-690a153d659c",
+  "project_path": "/Users/tyroneross/dev/git-folder/stratagem",
+  "trigger": "time_interval",
+  "compaction_cycle": 0,
+  "context_remaining_pct": 0.62,
+  "token_estimate": 76301,
+  "intent": "Unknown",
+  "progress": "Unknown",
+  "current_status": "Last user direction: \"test the plugin discovery\". Recent activity: Edit(2), Bash(2), Write(1)",
+  "decisions": [],
+  "open_items": [],
+  "unknowns": [],
+  "files_changed": [
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/src/stratagem/frameworks/output_formats.md",
+      "operations": [
+        "write"
+      ],
+      "lines_changed": 37
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/src/stratagem/subagents/prompts/design_agent.md",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 10
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/plugin/agents/research-orchestrator/AGENT.md",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 15
+    }
+  ],
+  "errors_encountered": [
+    {
+      "message": "1\t\"\"\"Report generation tool — create markdown and PPTX reports.\"\"\"",
+      "tool": "toolu_01KgVPbPw7wjGCPgXHNuE6LJ",
+      "resolved": false
+    },
+    {
+      "message": "1\t\"\"\"PowerPoint tools — read and create .pptx files.\"\"\"",
+      "tool": "toolu_01RUCJ5MeZ6VqSTPcSJBFeFt",
+      "resolved": false
+    },
+    {
+      "message": "60\t        return _error(\"At least one sheet is required\")",
+      "tool": "toolu_016Z17ZzmbVDyZ3K9bbZaXWt",
+      "resolved": false
+    }
+  ],
+  "tools_summary": {
+    "Bash": 43,
+    "Read": 21,
+    "Write": 16,
+    "ToolSearch": 4,
+    "Skill": 1,
+    "Agent": 3,
+    "ExitPlanMode": 1,
+    "TaskCreate": 6,
+    "TaskUpdate": 12,
+    "Edit": 11
+  },
+  "user_sentiment": "neutral"
+}

@@ -1,0 +1,21 @@
+{
+  "snapshot_id": "SNAP_20260426_233841",
+  "timestamp": 1777271921287,
+  "session_id": "37adeaa8-7c81-4a40-9f58-f02f7538f8eb",
+  "project_path": "/Users/tyroneross/dev/git-folder/stratagem/app",
+  "trigger": "manual",
+  "compaction_cycle": 1,
+  "context_remaining_pct": 0.98,
+  "token_estimate": 3500,
+  "intent": "Unknown",
+  "progress": "Unknown",
+  "current_status": "No status available",
+  "decisions": [],
+  "open_items": [],
+  "unknowns": [],
+  "files_changed": [],
+  "errors_encountered": [],
+  "tools_summary": {},
+  "user_sentiment": "neutral",
+  "prior_snapshot_id": "SNAP_20260426_233838"
+}

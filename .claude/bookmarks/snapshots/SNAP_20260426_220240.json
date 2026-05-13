@@ -1,0 +1,135 @@
+{
+  "snapshot_id": "SNAP_20260426_220240",
+  "timestamp": 1777266160266,
+  "session_id": "37adeaa8-7c81-4a40-9f58-f02f7538f8eb",
+  "project_path": "/Users/tyroneross/dev/git-folder/stratagem",
+  "trigger": "time_interval",
+  "compaction_cycle": 0,
+  "context_remaining_pct": 0.69,
+  "token_estimate": 62437,
+  "intent": "Unknown",
+  "progress": "Unknown",
+  "current_status": "Last user direction: \"If i do have a dmeo i'd build  seprate demo par tof app.  i don't want to mix it with real app\". Recent activity: Bash(2), Read(1), Edit(1)",
+  "decisions": [],
+  "open_items": [],
+  "unknowns": [],
+  "files_changed": [
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/app/Stratagem/Services/SetupManager.swift",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 1
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/docs/setup-mockup.html",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 2
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/.bookmark/index.json",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 1
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/src/stratagem/agent.py",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 253
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/src/stratagem/__main__.py",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 14
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/tests/test_integration.py",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 42
+    },
+    {
+      "path": "/Users/tyroneross/dev/git-folder/stratagem/src/stratagem/ui.py",
+      "operations": [
+        "edit"
+      ],
+      "lines_changed": 99
+    }
+  ],
+  "errors_encountered": [
+    {
+      "message": "do shell script \"",
+      "tool": "toolu_011T1YQxEbvC4KwMoj7KRaqR",
+      "resolved": false
+    },
+    {
+      "message": "src/stratagem/tools/docx.py:9:@tool(",
+      "tool": "toolu_015GgMJ8HrS7H9bsaEvcgy59",
+      "resolved": false
+    },
+    {
+      "message": "src/stratagem/threads.py:21:def _threads_dir(cwd: Path) -> Path:",
+      "tool": "toolu_01BKfNM8ZTNieTdVufsRdGkE",
+      "resolved": false
+    },
+    {
+      "message": "1\t\"\"\"Main agent setup — configures query() with all tools and subagents.\"\"\"",
+      "tool": "toolu_01RxMsE7jhptVqRwtvV48P5M",
+      "resolved": false
+    },
+    {
+      "message": "920\t                            cwd=effective_cwd,",
+      "tool": "toolu_01LYtb9Fma2VtjpHbnU3PLYK",
+      "resolved": false
+    },
+    {
+      "message": "1\t\"\"\"CLI entry point: python -m stratagem\"\"\"",
+      "tool": "toolu_01HKsFPZp5kmEfFgBsRPj45h",
+      "resolved": false
+    },
+    {
+      "message": "RUN  test_threads::TestThreads::test_create_thread_idempotent\r  PASS test_threads::TestThreads::test_create_thread_idempotent",
+      "tool": "toolu_01D5Pof3U3HR16b48L6LwPCr",
+      "resolved": false
+    },
+    {
+      "message": "85 passed, 7 failed, 2 skipped in 94 tests",
+      "tool": "toolu_017siDZoWAUxvBbviiTSnn2b",
+      "resolved": false
+    },
+    {
+      "message": "1181\t    def _handle_threads(self):",
+      "tool": "toolu_01PwtakWW7LEyQk9m7DcCLkY",
+      "resolved": false
+    },
+    {
+      "message": "UI Scan: http://localhost:8420/",
+      "tool": "toolu_017SCPJsY9XGD3XDYdoN49Mu",
+      "resolved": false
+    }
+  ],
+  "tools_summary": {
+    "Bash": 60,
+    "Read": 20,
+    "Edit": 24,
+    "ToolSearch": 3,
+    "TaskCreate": 4,
+    "TaskUpdate": 8,
+    "Skill": 1,
+    "mcp__plugin_ibr_ibr__snapshot": 1,
+    "mcp__plugin_ibr_ibr__scan": 3,
+    "Agent": 1,
+    "mcp__plugin_ibr_ibr__screenshot": 5,
+    "mcp__plugin_ibr_ibr__interact": 1
+  },
+  "user_sentiment": "neutral",
+  "prior_snapshot_id": "SNAP_20260426_220143"
+}
