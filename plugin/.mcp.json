@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "stratagem": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "stratagem.server"],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}/.."
-    }
-  }
-}
