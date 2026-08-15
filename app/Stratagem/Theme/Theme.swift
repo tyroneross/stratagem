@@ -14,6 +14,11 @@ enum Theme {
             dark: NSColor(hex: "#1F2937")
         )
 
+        static let surfaceElevated = SwiftUI.Color(
+            light: NSColor(hex: "#FFFFFF"),
+            dark: NSColor(hex: "#172033")
+        )
+
         static let border = SwiftUI.Color(
             light: NSColor(hex: "#E5E7EB"),
             dark: NSColor(hex: "#374151")
@@ -42,6 +47,21 @@ enum Theme {
         static let accentLight = SwiftUI.Color(
             light: NSColor(hex: "#5EEAD4"),
             dark: NSColor(hex: "#2DD4BF")
+        )
+
+        static let success = SwiftUI.Color(
+            light: NSColor(hex: "#15803D"),
+            dark: NSColor(hex: "#22C55E")
+        )
+
+        static let warning = SwiftUI.Color(
+            light: NSColor(hex: "#B45309"),
+            dark: NSColor(hex: "#F59E0B")
+        )
+
+        static let danger = SwiftUI.Color(
+            light: NSColor(hex: "#B91C1C"),
+            dark: NSColor(hex: "#F87171")
         )
 
         // Node states
@@ -89,6 +109,8 @@ enum Theme {
     }
 
     enum Font {
+        static let largeTitle = SwiftUI.Font.system(size: 24, weight: .semibold)
+        static let headline = SwiftUI.Font.system(size: 16, weight: .semibold)
         static let title = SwiftUI.Font.system(size: 16, weight: .bold)
         static let body = SwiftUI.Font.system(size: 14)
         static let caption = SwiftUI.Font.system(size: 12)

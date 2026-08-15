@@ -42,10 +42,11 @@ struct MainView: View {
 
             ToolbarItem(placement: .automatic) {
                 HStack(spacing: Theme.Spacing.xs) {
-                    Circle()
-                        .fill(backendManager.isRunning ? Color.green : Color.red)
-                        .frame(width: 8, height: 8)
-                    Text(backendManager.isRunning ? "Backend running" : "Backend stopped")
+                    Image(systemName: backendManager.isRunning ? "checkmark.circle.fill" : "clock.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(toolbarStatusColor)
+
+                    Text(toolbarStatusLabel)
                         .font(Theme.Font.metadata)
                         .foregroundStyle(Theme.Color.textMuted)
                 }
@@ -59,5 +60,19 @@ struct MainView: View {
                 threadStore.fetchThreads(baseURL: backendManager.baseURL)
             }
         }
+    }
+
+    private var toolbarStatusLabel: String {
+        if backendManager.isRunning {
+            return "Backend ready"
+        }
+        return backendManager.errorMessage == nil ? "Starting backend" : "Backend issue"
+    }
+
+    private var toolbarStatusColor: Color {
+        if backendManager.isRunning {
+            return Theme.Color.success
+        }
+        return backendManager.errorMessage == nil ? Theme.Color.warning : Theme.Color.danger
     }
 }

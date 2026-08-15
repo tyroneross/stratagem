@@ -22,6 +22,9 @@ struct FlowDiagramView: View {
         .onChange(of: completedAgents) { _, newValue in
             viewModel.updateFromSets(active: activeAgents, completed: newValue)
         }
+        .onAppear {
+            viewModel.updateFromSets(active: activeAgents, completed: completedAgents)
+        }
     }
 
     private func drawDiagram(context: GraphicsContext, size: CGSize, time: Double) {
@@ -29,18 +32,16 @@ struct FlowDiagramView: View {
         let phaseGap: CGFloat = 12
         let arrowWidth: CGFloat = 24
 
-        // Calculate phase column widths proportional to agent count
         let totalArrowWidth = arrowWidth * CGFloat(phases.count - 1)
-        let availableWidth = size.width - padding * 2 - totalArrowWidth - phaseGap * CGFloat(phases.count - 1)
+        let availableWidth = max(size.width - padding * 2 - totalArrowWidth - phaseGap * CGFloat(phases.count - 1), 1)
 
-        // Weight columns by agent count (min 1)
         let agentCounts = phases.map { phase in max(AgentNode.agentsForPhase(phase).count, 1) }
         let totalWeight = agentCounts.reduce(0, +)
-        let columnWidths = agentCounts.map { count in availableWidth * CGFloat(count) / CGFloat(totalWeight) }
-
-        // Minimum column width
-        let minColumnWidth: CGFloat = 100
-        let adjustedWidths = columnWidths.map { max($0, minColumnWidth) }
+        let baseColumnWidth = max(56, min(76, availableWidth / CGFloat(phases.count) * 0.6))
+        let flexibleWidth = max(availableWidth - baseColumnWidth * CGFloat(phases.count), 0)
+        let adjustedWidths = agentCounts.map { count in
+            baseColumnWidth + flexibleWidth * CGFloat(count) / CGFloat(totalWeight)
+        }
 
         let headerHeight: CGFloat = 24
         let nodeHeight: CGFloat = 28
@@ -138,9 +139,9 @@ struct FlowDiagramView: View {
         context.fill(nodePath, with: .color(fillColor))
         context.stroke(nodePath, with: .color(strokeColor), lineWidth: strokeWidth)
 
-        // Agent name
+        let fontSize: CGFloat = rect.width < 86 ? 10 : 11
         let nameText = Text(agent.displayName)
-            .font(.system(size: 11, weight: agent.state == .active ? .semibold : .regular))
+            .font(.system(size: fontSize, weight: agent.state == .active ? .semibold : .regular))
             .foregroundColor(textColor)
         context.draw(
             context.resolve(nameText),

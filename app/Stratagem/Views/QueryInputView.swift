@@ -2,45 +2,68 @@ import SwiftUI
 
 struct QueryInputView: View {
     @ObservedObject var viewModel: ResearchViewModel
+    let isBackendReady: Bool
+    let backendError: String?
     var onRun: () -> Void
     var onStop: () -> Void
 
     var body: some View {
-        VStack(spacing: Theme.Spacing.sm) {
-            // Query text area
-            TextField("Enter your research question...", text: $viewModel.query, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Theme.Font.body)
-                .foregroundStyle(Theme.Color.textPrimary)
-                .padding(Theme.Spacing.sm)
-                .frame(minHeight: 60, maxHeight: 120)
-                .lineLimit(3...6)
-                .background(Theme.Color.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Theme.Color.border, lineWidth: 1)
-                )
-                .onSubmit {
-                    if viewModel.canRun {
-                        onRun()
-                    }
-                }
-
-            // Controls row
-            HStack(spacing: Theme.Spacing.sm) {
-                // Model picker
-                Picker("", selection: $viewModel.selectedModel) {
-                    ForEach(viewModel.availableModels, id: \.self) { model in
-                        Text(model.capitalized).tag(model)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Question")
+                    .font(Theme.Font.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Theme.Color.textPrimary)
 
                 Spacer()
 
-                // Status
+                if let statusText {
+                    Text(statusText)
+                        .font(Theme.Font.metadata)
+                        .foregroundStyle(statusColor)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+
+            TextField("Ask a market research question...", text: $viewModel.query, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.Color.textPrimary)
+                .padding(Theme.Spacing.md)
+                .frame(minHeight: 72, maxHeight: 132)
+                .lineLimit(3...6)
+                .background(Theme.Color.surfaceElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(inputBorderColor, lineWidth: 1)
+                )
+                .onSubmit {
+                    if canSubmit {
+                        onRun()
+                    }
+            }
+
+            HStack(spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text("Model")
+                        .font(Theme.Font.metadata)
+                        .foregroundStyle(Theme.Color.textMuted)
+
+                    Picker("", selection: $viewModel.selectedModel) {
+                        ForEach(viewModel.availableModels, id: \.self) { model in
+                            Text(model.capitalized).tag(model)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 220)
+                    .disabled(viewModel.state.isRunning)
+                    .accessibilityLabel("Model")
+                }
+
+                Spacer()
+
                 if case .complete(let turns, let durationMs, let cost) = viewModel.state {
                     HStack(spacing: Theme.Spacing.xs) {
                         Text("\(turns) turns")
@@ -55,7 +78,6 @@ struct QueryInputView: View {
                     .foregroundStyle(Theme.Color.textMuted)
                 }
 
-                // Run / Stop button
                 if viewModel.state.isRunning {
                     Button(action: onStop) {
                         HStack(spacing: Theme.Spacing.xs) {
@@ -66,9 +88,8 @@ struct QueryInputView: View {
                         .font(Theme.Font.body)
                         .fontWeight(.medium)
                         .foregroundStyle(.white)
-                        .padding(.horizontal, Theme.Spacing.md)
-                        .padding(.vertical, Theme.Spacing.sm)
-                        .background(Color.red.opacity(0.8))
+                        .frame(minWidth: 96, minHeight: 36)
+                        .background(Theme.Color.danger)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
@@ -81,19 +102,60 @@ struct QueryInputView: View {
                         }
                         .font(Theme.Font.body)
                         .fontWeight(.medium)
-                        .foregroundStyle(viewModel.canRun ? .white : Theme.Color.textMuted)
-                        .padding(.horizontal, Theme.Spacing.md)
-                        .padding(.vertical, Theme.Spacing.sm)
-                        .background(viewModel.canRun ? Theme.Color.accent : Theme.Color.surfaceSecondary)
+                        .foregroundStyle(canSubmit ? .white : Theme.Color.textMuted)
+                        .frame(minWidth: 96, minHeight: 36)
+                        .background(canSubmit ? Theme.Color.accent : Theme.Color.surfaceSecondary)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .disabled(!viewModel.canRun)
+                    .disabled(!canSubmit)
                     .keyboardShortcut(.return, modifiers: .command)
                 }
             }
         }
         .padding(Theme.Spacing.md)
+    }
+
+    private var canSubmit: Bool {
+        viewModel.canRun && isBackendReady
+    }
+
+    private var statusText: String? {
+        if let backendError, !backendError.isEmpty {
+            return backendError
+        }
+
+        if !isBackendReady {
+            return "Starting backend"
+        }
+
+        if case .error(let message) = viewModel.state {
+            return message
+        }
+
+        return nil
+    }
+
+    private var statusColor: Color {
+        hasErrorStatus ? Theme.Color.danger : Theme.Color.warning
+    }
+
+    private var hasErrorStatus: Bool {
+        if let backendError, !backendError.isEmpty {
+            return true
+        }
+
+        if case .error = viewModel.state {
+            return true
+        }
+
+        return false
+    }
+
+    private var inputBorderColor: Color {
+        canSubmit || viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? Theme.Color.border
+            : Theme.Color.warning.opacity(0.55)
     }
 
     private func formatDuration(_ ms: Int) -> String {
