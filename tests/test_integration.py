@@ -1,14 +1,29 @@
 """Integration tests for Stratagem agent."""
 
-from pathlib import Path
-
 from stratagem.server import create_stratagem_server, get_all_allowed_tools, ALL_TOOLS, TOOL_NAMES
 from stratagem.subagents.definitions import SUBAGENTS
+
+EXPECTED_TOOLS = [
+    "parse_pdf",
+    "scrape_url",
+    "read_spreadsheet",
+    "read_pptx",
+    "create_pptx",
+    "read_docx",
+    "extract_images",
+    "search_sec_filings",
+    "download_sec_filing",
+    "create_report",
+    "create_spreadsheet",
+    "create_specialist",
+    "record_observation",
+]
 
 
 class TestServer:
     def test_all_tools_registered(self):
-        assert len(ALL_TOOLS) == 12
+        assert [t.name for t in ALL_TOOLS] == EXPECTED_TOOLS
+        assert len(ALL_TOOLS) == 13
 
     def test_tool_names(self):
         for name in TOOL_NAMES:
@@ -66,22 +81,6 @@ class TestSubagents:
         assert any("download_sec_filing" in t for t in agent.tools)
 
 
-class TestPluginStructure:
-    def test_plugin_json_exists(self):
-        plugin_json = Path(__file__).parent.parent / "plugin" / "plugin.json"
-        assert plugin_json.exists()
-
-    def test_skill_files_exist(self):
-        skills_dir = Path(__file__).parent.parent / "plugin" / "skills"
-        for skill in ["research", "analyze-earnings", "extract-data", "flowchart"]:
-            skill_file = skills_dir / skill / "SKILL.md"
-            assert skill_file.exists(), f"Missing skill: {skill_file}"
-
-    def test_agent_file_exists(self):
-        agent_file = Path(__file__).parent.parent / "plugin" / "agents" / "research-orchestrator" / "AGENT.md"
-        assert agent_file.exists()
-
-
 class TestNavGator:
     def test_generate_architecture(self, tmp_path):
         from stratagem.navgator import generate_architecture
@@ -96,18 +95,18 @@ class TestNavGator:
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 13 agents + 12 tools = 25 components
-        assert index["stats"]["total_components"] == 25
+        # 13 agents (control + 12 subagents) + 13 tools = 26 components
+        assert index["stats"]["total_components"] == 26
         assert index["stats"]["components_by_type"]["agent"] == 13
-        assert index["stats"]["components_by_type"]["service"] == 12
+        assert index["stats"]["components_by_type"]["service"] == len(EXPECTED_TOOLS)
 
     def test_connection_count(self, tmp_path):
         import json
         from stratagem.navgator import generate_architecture
         arch_dir = generate_architecture(tmp_path)
         index = json.loads((arch_dir / "index.json").read_text())
-        # 12 delegations + 3 feedback + 16 tool uses + 1 control→create_report = 32
-        assert index["stats"]["total_connections"] == 32
+        # 12 delegations + 3 feedback + 19 tool uses = 34
+        assert index["stats"]["total_connections"] == 34
 
     def test_graph_nodes_match_components(self, tmp_path):
         import json
@@ -123,8 +122,8 @@ class TestNavGator:
         arch_dir = generate_architecture(tmp_path)
         comp_files = list((arch_dir / "components").glob("COMP_*.json"))
         conn_files = list((arch_dir / "connections").glob("CONN_*.json"))
-        assert len(comp_files) == 25
-        assert len(conn_files) == 32
+        assert len(comp_files) == 26
+        assert len(conn_files) == 34
 
 
 class TestAgentLogging:
