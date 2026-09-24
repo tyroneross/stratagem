@@ -42,3 +42,6 @@ Open Stratagem.app
 .navgator/architecture/SUMMARY.md
 .navgator/architecture/SUMMARY_FULL.md
 # <<< NavGator safety guard
+
+# build-loop runtime state (local only)
+.build-loop/
